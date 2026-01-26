@@ -10,7 +10,22 @@ import {
   type SetStateAction,
 } from "react";
 
-export type OnDropAction = ({ position }: { position: XYPosition }) => void;
+export type DropTarget =
+  | {
+      type: "flow";
+    }
+  | {
+      type: "container-body";
+      nodeId: string;
+    };
+
+export type OnDropAction = ({
+  position,
+  dropTarget,
+}: {
+  position: XYPosition;
+  dropTarget: DropTarget;
+}) => void;
 
 type DnDContextType = {
   isDragging: boolean;
@@ -73,13 +88,36 @@ export const useDnD = () => {
         event.clientY,
       );
       const isDroppingOnFlow = elementUnderPointer?.closest(".react-flow");
+      const containerBody = elementUnderPointer?.closest<HTMLElement>(
+        "[data-container-body='true']",
+      );
+      const containerId = containerBody?.dataset.nodeId;
+      const nodeElement = elementUnderPointer?.closest<HTMLElement>(
+        ".react-flow__node",
+      );
+      const parentIdFromNode = nodeElement?.dataset.parentId;
+      const containerIdFromNode = nodeElement?.dataset.containerId;
+      const resolvedContainerId =
+        containerId ?? parentIdFromNode ?? containerIdFromNode;
+      const dropTarget: DropTarget = resolvedContainerId
+        ? { type: "container-body", nodeId: resolvedContainerId }
+        : { type: "flow" };
 
       if (isDroppingOnFlow) {
-        const flowPosition = screenToFlowPosition({
-          x: event.clientX,
-          y: event.clientY,
-        });
-        dropAction?.({ position: flowPosition });
+        const containerBodyElement = resolvedContainerId
+          ? document.querySelector<HTMLElement>(
+              `[data-container-body='true'][data-node-id='${resolvedContainerId}']`,
+            )
+          : containerBody;
+        const rect = containerBodyElement?.getBoundingClientRect();
+        const dropPoint = rect
+          ? {
+              x: rect.left + rect.width / 2,
+              y: rect.top + rect.height / 2,
+            }
+          : { x: event.clientX, y: event.clientY };
+        const flowPosition = screenToFlowPosition(dropPoint);
+        dropAction?.({ position: flowPosition, dropTarget });
       }
 
       setIsDragging(false);

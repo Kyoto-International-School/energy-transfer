@@ -57,7 +57,13 @@
   font-size: 0.75rem;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: #f8fafc;
+  background: #0f1a1c;
+  border-radius: 12px;
+  padding: 6px 12px;
+  display: block;
+  width: 100%;
+  text-align: center;
 }
 
 .panel__title {
@@ -71,6 +77,74 @@
   margin: 0;
   font-size: 0.9rem;
   color: var(--muted);
+}
+
+.inspector__button {
+  width: 100%;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  padding: 10px 12px;
+  background: #ffffff;
+  color: #0f1a1c;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  transition: border-color 0.2s ease, color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.inspector__button svg {
+  width: 14px;
+  height: 14px;
+}
+
+.inspector__button:hover {
+  border-color: rgba(15, 26, 28, 0.3);
+  box-shadow: 0 8px 16px rgba(16, 20, 24, 0.12);
+}
+
+.inspector__button--danger {
+  border-color: rgba(185, 28, 28, 0.35);
+  color: #b91c1c;
+  background: rgba(185, 28, 28, 0.08);
+}
+
+.inspector__button--danger:hover {
+  border-color: rgba(185, 28, 28, 0.6);
+  box-shadow: 0 10px 20px rgba(185, 28, 28, 0.15);
+}
+
+.inspector__content {
+  flex: 1;
+}
+
+.inspector__footer {
+  margin-top: auto;
+}
+.library-item__content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.library-item__icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 12px;
+  border: 1px solid var(--panel-border);
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.library-item__icon-svg {
+  width: 18px;
+  height: 18px;
 }
 
 .library-list {
@@ -173,6 +247,19 @@
   color: #0f1a1c;
 }
 
+.inspector__value--icon {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inspector__value-icon {
+  width: 18px;
+  height: 18px;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 .inspector__input {
   width: 100%;
   border-radius: 12px;
@@ -186,6 +273,37 @@
   outline: 2px solid var(--accent);
   border-color: transparent;
 }
+
+.edge-label-wrapper {
+  position: absolute;
+  pointer-events: all;
+  padding-bottom: 14px;
+  z-index: 1000;
+}
+
+.react-flow__edge-labels {
+  z-index: 1000;
+}
+
+
+.edge-label-text {
+  background: rgba(255, 255, 255, 0.92);
+  border: 1px solid var(--panel-border);
+  border-radius: 999px;
+  padding: 4px 10px;
+  font-size: 0.75rem;
+  color: #0f1a1c;
+  box-shadow: 0 6px 12px rgba(16, 20, 24, 0.12);
+  white-space: nowrap;
+}
+
+.edge-center-marker {
+  stroke: transparent;
+  stroke-width: 2px;
+  fill: none;
+  pointer-events: none;
+}
+
 
 @media (max-width: 960px) {
   .app-shell {

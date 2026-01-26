@@ -1,45 +1,185 @@
-import type { Node } from "@xyflow/react";
-import type { EnergyNodeData } from "../types";
+import { useReactFlow, type Edge, type Node } from "@xyflow/react";
+import { FaArrowAltCircleRight, FaTrash } from "react-icons/fa";
+import {
+  EDGE_LABEL_OPTIONS,
+  STORE_TYPE_OPTIONS,
+  type EdgeLabel,
+  type EnergyEdgeData,
+  type EnergyNodeData,
+  type StoreType,
+} from "../types";
+import { ComponentTypeIcon } from "./component-icons";
 
 type InspectorProps = {
   selectedNode: Node<EnergyNodeData> | null;
+  selectedEdge: Edge<EnergyEdgeData> | null;
   onLabelChange: (label: string) => void;
+  onStoreTypeChange: (storeType: StoreType | "") => void;
+  onEdgeLabelChange: (label: EdgeLabel | "") => void;
 };
 
-export function Inspector({ selectedNode, onLabelChange }: InspectorProps) {
+export function Inspector({
+  selectedNode,
+  selectedEdge,
+  onLabelChange,
+  onStoreTypeChange,
+  onEdgeLabelChange,
+}: InspectorProps) {
+  const { deleteElements, getNodes } = useReactFlow();
+
+  const handleDeleteNode = () => {
+    if (!selectedNode) return;
+
+    if (selectedNode.data.kind === "container") {
+      const nodesToRemove = getNodes().filter(
+        (node) =>
+          node.id === selectedNode.id || node.parentId === selectedNode.id,
+      );
+      deleteElements({ nodes: nodesToRemove });
+      return;
+    }
+
+    deleteElements({ nodes: [selectedNode] });
+  };
+
+  const handleDeleteEdge = () => {
+    if (!selectedEdge) return;
+    deleteElements({ edges: [selectedEdge] });
+  };
+
+  const renderNodeDetails = () => {
+    if (!selectedNode) return null;
+
+    return (
+      <div className="inspector-grid">
+        <div>
+          <p className="inspector__label">Component type</p>
+          <p className="inspector__value inspector__value--icon">
+            <ComponentTypeIcon
+              kind={selectedNode.data.kind}
+              className="inspector__value-icon"
+            />
+            {selectedNode.data.kind.charAt(0).toUpperCase() +
+              selectedNode.data.kind.slice(1)}
+          </p>
+        </div>
+        <div>
+          {selectedNode.data.kind === "store" ? (
+            <>
+              <label className="inspector__label" htmlFor="store-type">
+                Store type
+              </label>
+              <select
+                id="store-type"
+                className="inspector__input"
+                value={selectedNode.data.storeType ?? ""}
+                onChange={(event) =>
+                  onStoreTypeChange(event.target.value as StoreType | "")
+                }
+              >
+                <option value="">Select store type</option>
+                {STORE_TYPE_OPTIONS.map((option) => (
+                  <option key={option} value={option}>
+                    {option}
+                  </option>
+                ))}
+              </select>
+            </>
+          ) : (
+            <>
+              <label className="inspector__label" htmlFor="node-label">
+                Label
+              </label>
+              <input
+                id="node-label"
+                className="inspector__input"
+                type="text"
+                value={selectedNode.data.label}
+                onChange={(event) => onLabelChange(event.target.value)}
+              />
+            </>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  const renderEdgeDetails = () => {
+    if (!selectedEdge || selectedNode) return null;
+
+    return (
+      <div className="inspector-grid">
+        <div>
+          <p className="inspector__label">Component type</p>
+          <p className="inspector__value inspector__value--icon">
+            <FaArrowAltCircleRight
+              className="inspector__value-icon"
+              aria-hidden="true"
+            />
+            Transfer
+          </p>
+        </div>
+        <div>
+          <label className="inspector__label" htmlFor="edge-label">
+            Label
+          </label>
+          <select
+            id="edge-label"
+            className="inspector__input"
+            value={selectedEdge.data?.label ?? ""}
+            onChange={(event) =>
+              onEdgeLabelChange(event.target.value as EdgeLabel | "")
+            }
+          >
+            <option value="">Select edge type</option>
+            {EDGE_LABEL_OPTIONS.map((option) => (
+              <option key={option} value={option}>
+                {option}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+    );
+  };
+
+  const deleteAction = selectedNode
+    ? {
+        label: `Delete ${selectedNode.data.kind}`,
+        onClick: handleDeleteNode,
+      }
+    : selectedEdge
+      ? {
+          label: "Delete transfer",
+          onClick: handleDeleteEdge,
+        }
+      : null;
+
   return (
     <aside className="panel panel--inspector">
       <div className="panel__header">
         <p className="panel__eyebrow">Inspector</p>
-        <h2 className="panel__title">Selection</h2>
       </div>
-      {selectedNode ? (
-        <div className="inspector-grid">
-          <div>
-            <p className="inspector__label">Id</p>
-            <p className="inspector__value">{selectedNode.id}</p>
-          </div>
-          <div>
-            <p className="inspector__label">Type</p>
-            <p className="inspector__value">
-              {selectedNode.data.kind.toUpperCase()}
-            </p>
-          </div>
-          <div>
-            <label className="inspector__label" htmlFor="node-label">
-              Label
-            </label>
-            <input
-              id="node-label"
-              className="inspector__input"
-              type="text"
-              value={selectedNode.data.label}
-              onChange={(event) => onLabelChange(event.target.value)}
-            />
-          </div>
+      <div className="inspector__content">
+        {selectedNode ? (
+          renderNodeDetails()
+        ) : selectedEdge ? (
+          renderEdgeDetails()
+        ) : (
+          <p className="panel__note">Select a component to see its details.</p>
+        )}
+      </div>
+      {deleteAction && (
+        <div className="inspector__footer">
+          <button
+            type="button"
+            className="inspector__button inspector__button--danger"
+            onClick={deleteAction.onClick}
+          >
+            <FaTrash aria-hidden="true" />
+            {deleteAction.label}
+          </button>
         </div>
-      ) : (
-        <p className="panel__note">Select a node to see its details.</p>
       )}
     </aside>
   );

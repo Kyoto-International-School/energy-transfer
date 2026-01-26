@@ -1,9 +1,9 @@
-import type { Edge, Node, Viewport } from "@xyflow/react";
-import type { EnergyNodeData } from "./types";
+import type { Edge, Viewport } from "@xyflow/react";
+import type { EnergyEdgeData, EnergyNode } from "./types";
 
 type PersistedDiagram = {
-  nodes: Array<Node<EnergyNodeData>>;
-  edges: Edge[];
+  nodes: EnergyNode[];
+  edges: Array<Edge<EnergyEdgeData>>;
   viewport: Viewport;
 };
 

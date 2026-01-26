@@ -1,8 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { type XYPosition } from "@xyflow/react";
 
-import { useDnD, useDnDPosition, type OnDropAction } from "../dnd/useDnD";
+import {
+  useDnD,
+  useDnDPosition,
+  type DropTarget,
+  type OnDropAction,
+} from "../dnd/useDnD";
 import type { EnergyNodeKind } from "../types";
+import { ComponentTypeIcon } from "./component-icons";
 
 type SidebarItem = {
   kind: EnergyNodeKind;
@@ -11,14 +17,18 @@ type SidebarItem = {
 };
 
 type SidebarProps = {
-  onCreateNode: (kind: EnergyNodeKind, position: XYPosition) => void;
+  onCreateNode: (
+    kind: EnergyNodeKind,
+    position: XYPosition,
+    dropTarget: DropTarget,
+  ) => void;
 };
 
 const items: SidebarItem[] = [
   {
     kind: "container",
     label: "Container",
-    description: "Groups or holds elements.",
+    description: "Holds stores of energy.",
   },
   {
     kind: "store",
@@ -39,8 +49,8 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
 
   const createDropAction = useCallback(
     (kind: EnergyNodeKind): OnDropAction => {
-      return ({ position }) => {
-        onCreateNode(kind, position);
+      return ({ position, dropTarget }) => {
+        onCreateNode(kind, position, dropTarget);
         setActiveKind(null);
       };
     },
@@ -53,7 +63,6 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
       <aside className="panel panel--sidebar">
         <div className="panel__header">
           <p className="panel__eyebrow">Component Library</p>
-          <h2 className="panel__title">Drag to the canvas</h2>
         </div>
         <div className="library-list">
           {items.map((item) => (
@@ -67,17 +76,23 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
                 onDragStart(event, createDropAction(item.kind));
               }}
             >
-              <div>
-                <p className="library-item__label">{item.label}</p>
-                <p className="library-item__description">{item.description}</p>
+              <div className="library-item__content">
+                <span className="library-item__icon" aria-hidden="true">
+                  <ComponentTypeIcon
+                    kind={item.kind}
+                    className="library-item__icon-svg"
+                  />
+                </span>
+                <div>
+                  <p className="library-item__label">{item.label}</p>
+                  <p className="library-item__description">
+                    {item.description}
+                  </p>
+                </div>
               </div>
-              <span className="library-item__badge">{item.kind}</span>
             </button>
           ))}
         </div>
-        <p className="panel__note">
-          Touch, pen, or mouse supported. Drop onto the canvas.
-        </p>
       </aside>
     </>
   );
