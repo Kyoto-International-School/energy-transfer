@@ -10,15 +10,12 @@ import { BaseNode } from "../base-node";
 import { BaseHandle } from "../base-handle";
 import type { EnergyNode } from "../../types";
 
-const TOP_HANDLE_OFFSETS = ["20%", "50%", "80%"];
-const BOTTOM_HANDLE_OFFSETS = ["20%", "50%", "80%"];
-
-export const StoreNode = memo(function StoreNode({
+export const ExternalNode = memo(function ExternalNode({
   id,
   data,
   selected,
 }: NodeProps<EnergyNode>) {
-  const storeLabel = data.storeType || data.label || "Select store type";
+  const roleLabel = data.label || "Unlabeled External";
   const [isHovered, setIsHovered] = useState(false);
   const edges = useStore((state) => state.edges);
   const connection = useConnection((state) => ({
@@ -38,12 +35,12 @@ export const StoreNode = memo(function StoreNode({
     }
     return used;
   }, [edges, id]);
-  const isDraggingToStore =
+  const isDraggingToNode =
     connection.inProgress && connection.toNode?.id === id;
-  const isDraggingFromStore =
+  const isDraggingFromNode =
     connection.inProgress && connection.fromNode?.id === id;
   const showAllHandles =
-    !!selected || isHovered || isDraggingToStore || isDraggingFromStore;
+    !!selected || isHovered || isDraggingToNode || isDraggingFromNode;
   const getHandleStyle = (
     isVisible: boolean,
     style?: CSSProperties,
@@ -56,11 +53,13 @@ export const StoreNode = memo(function StoreNode({
 
   return (
     <BaseNode
-      className="w-44 min-h-[60px] flex items-center justify-center px-3 text-center"
+      className="relative w-8 h-8 rounded-full border border-black bg-black text-white"
       onPointerEnter={() => setIsHovered(true)}
       onPointerLeave={() => setIsHovered(false)}
     >
-      <p className="text-sm font-semibold text-slate-900">{storeLabel}</p>
+      <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 whitespace-nowrap rounded-full border border-slate-200 bg-white/90 px-2 py-0.5 text-[0.7rem] font-semibold text-slate-900 shadow-sm">
+        {roleLabel}
+      </span>
 
       <BaseHandle
         id="left"
@@ -74,31 +73,6 @@ export const StoreNode = memo(function StoreNode({
         position={Position.Right}
         style={getHandleStyle(showAllHandles || usedHandleIds.has("right"))}
       />
-
-      {TOP_HANDLE_OFFSETS.map((offset, index) => (
-        <BaseHandle
-          key={`top-${offset}`}
-          id={`top-${index + 1}`}
-          type="source"
-          position={Position.Top}
-          style={getHandleStyle(
-            showAllHandles || usedHandleIds.has(`top-${index + 1}`),
-            { left: offset },
-          )}
-        />
-      ))}
-      {BOTTOM_HANDLE_OFFSETS.map((offset, index) => (
-        <BaseHandle
-          key={`bottom-${offset}`}
-          id={`bottom-${index + 1}`}
-          type="source"
-          position={Position.Bottom}
-          style={getHandleStyle(
-            showAllHandles || usedHandleIds.has(`bottom-${index + 1}`),
-            { left: offset },
-          )}
-        />
-      ))}
     </BaseNode>
   );
 });

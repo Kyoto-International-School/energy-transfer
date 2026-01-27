@@ -27,6 +27,7 @@ import { Inspector } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { ContainerNode } from "./components/nodes/ContainerNode";
 import { StoreNode } from "./components/nodes/StoreNode";
+import { ExternalNode } from "./components/nodes/ExternalNode";
 import { LabeledArrowEdge } from "./components/edges/LabeledArrowEdge";
 import { DnDProvider, type DropTarget } from "./dnd/useDnD";
 import { loadDiagram, saveDiagram } from "./storage";
@@ -44,7 +45,12 @@ const CONTAINER_WIDTH_FALLBACK = 224;
 const STORE_STACK_SPACING = 80;
 const STORE_ESTIMATED_HEIGHT = 60;
 const STORE_VERTICAL_PADDING = 24;
-const EDGE_MARKER = { type: MarkerType.ArrowClosed, color: "#0f1a1c" };
+const EDGE_MARKER = {
+  type: MarkerType.ArrowClosed,
+  color: "#0f1a1c",
+  width: 20,
+  height: 20,
+};
 
 function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
   const storeCounts = new Map<string, number>();
@@ -161,7 +167,7 @@ const initialEdges: EnergyEdge[] = [
     target: "node-2",
     type: "labeledArrow",
     data: { label: "" },
-    label: "Select edge type",
+    label: "Select store type",
     markerEnd: EDGE_MARKER,
   },
 ];
@@ -170,7 +176,7 @@ const normalizeEdges = (edges: EnergyEdge[]): EnergyEdge[] =>
   edges.map((edge) => ({
     ...edge,
     data: { label: edge.data?.label ?? "" },
-    label: edge.label ?? "Select edge type",
+    label: edge.label ?? "Select store type",
     type: edge.type ?? "labeledArrow",
     markerEnd: edge.markerEnd ?? EDGE_MARKER,
     markerStart: undefined,
@@ -179,6 +185,7 @@ const normalizeEdges = (edges: EnergyEdge[]): EnergyEdge[] =>
 const nodeTypes: NodeTypes = {
   container: ContainerNode as NodeTypes[string],
   store: StoreNode as NodeTypes[string],
+  external: ExternalNode as NodeTypes[string],
 };
 
 const edgeTypes: EdgeTypes = {
@@ -202,8 +209,101 @@ function Editor() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [viewport, setViewportState] = useState<Viewport | null>(null);
+  const selectionTimestampRef = useRef(0);
+  const pointerDownOnElementRef = useRef<"node" | "edge" | "handle" | null>(
+    null,
+  );
+  const debugTouch = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    if ((window as { DEBUG_TOUCH?: boolean }).DEBUG_TOUCH) return true;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("debugTouch") === "1") return true;
+    return window.localStorage.getItem("debug-touch") === "1";
+  }, []);
   const nodeIdRef = useRef(getNextNodeId(initialNodes));
   const { setViewport, getViewport } = useReactFlow();
+
+  const logTouch = useCallback(
+    (label: string, detail?: Record<string, unknown>) => {
+      if (!debugTouch) return;
+      if (detail) {
+        console.log(`[touch-debug] ${label}`, detail);
+      } else {
+        console.log(`[touch-debug] ${label}`);
+      }
+    },
+    [debugTouch],
+  );
+
+  const selectNodeById = useCallback(
+    (nodeId: string | null, meta?: Record<string, unknown>) => {
+      if (!nodeId) {
+        return;
+      }
+      setNodes((current) =>
+        current.map((node) => {
+          const shouldSelect = node.id === nodeId;
+          if (node.selected === shouldSelect) return node;
+          return { ...node, selected: shouldSelect };
+        }),
+      );
+      setEdges((current) =>
+        current.map((edge) => {
+          if (!edge.selected) return edge;
+          return { ...edge, selected: false };
+        }),
+      );
+      setSelectedNodeId(nodeId);
+      setSelectedEdgeId(null);
+      selectionTimestampRef.current = performance.now();
+      logTouch("select-node", { nodeId, ...meta });
+    },
+    [logTouch, setEdges, setNodes],
+  );
+
+  const selectEdgeById = useCallback(
+    (edgeId: string | null, meta?: Record<string, unknown>) => {
+      if (!edgeId) {
+        return;
+      }
+      setEdges((current) =>
+        current.map((edge) => {
+          const shouldSelect = edge.id === edgeId;
+          if (edge.selected === shouldSelect) return edge;
+          return { ...edge, selected: shouldSelect };
+        }),
+      );
+      setNodes((current) =>
+        current.map((node) => {
+          if (!node.selected) return node;
+          return { ...node, selected: false };
+        }),
+      );
+      setSelectedEdgeId(edgeId);
+      setSelectedNodeId(null);
+      selectionTimestampRef.current = performance.now();
+      logTouch("select-edge", { edgeId, ...meta });
+    },
+    [logTouch, setEdges, setNodes],
+  );
+
+  const clearSelection = useCallback(() => {
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setNodes((current) =>
+      current.map((node) => {
+        if (!node.selected) return node;
+        return { ...node, selected: false };
+      }),
+    );
+    setEdges((current) =>
+      current.map((edge) => {
+        if (!edge.selected) return edge;
+        return { ...edge, selected: false };
+      }),
+    );
+    logTouch("clear-selection");
+  }, [logTouch, setEdges, setNodes]);
 
   const selectedNode = useMemo(
     () => nodes.find((node) => node.id === selectedNodeId) ?? null,
@@ -237,6 +337,82 @@ function Editor() {
     nodeIdRef.current = getNextNodeId(nodes);
   }, [nodes]);
 
+  useEffect(() => {
+    const handlePointerDown = (event: PointerEvent) => {
+      const target = event.target as HTMLElement | null;
+      const targetNode = target?.closest(".react-flow__node");
+      const targetEdge = target?.closest(".react-flow__edge");
+      const targetHandle = target?.closest(".react-flow__handle");
+      if (!target) {
+        pointerDownOnElementRef.current = null;
+        logTouch("pointer-down (no target)", {
+          pointerType: event.pointerType,
+        });
+        return;
+      }
+
+      if (targetNode) {
+        pointerDownOnElementRef.current = "node";
+        logTouch("pointer-down on node", {
+          pointerType: event.pointerType,
+          nodeId: targetNode.getAttribute("data-id"),
+        });
+        if (event.pointerType === "touch") {
+          const nodeId = targetNode.getAttribute("data-id");
+          if (nodeId) {
+            selectNodeById(nodeId, { source: "pointerdown-touch" });
+          }
+        }
+        return;
+      }
+      if (targetEdge) {
+        pointerDownOnElementRef.current = "edge";
+        logTouch("pointer-down on edge", {
+          pointerType: event.pointerType,
+          edgeId: targetEdge.getAttribute("data-id"),
+        });
+        if (event.pointerType === "touch") {
+          const edgeId = targetEdge.getAttribute("data-id");
+          if (edgeId) {
+            selectEdgeById(edgeId, { source: "pointerdown-touch" });
+          }
+        }
+        return;
+      }
+      if (targetHandle) {
+        pointerDownOnElementRef.current = "handle";
+        logTouch("pointer-down on handle", {
+          pointerType: event.pointerType,
+          handleId: targetHandle.getAttribute("data-handleid"),
+          nodeId: targetHandle.getAttribute("data-nodeid"),
+        });
+        return;
+      }
+
+      pointerDownOnElementRef.current = null;
+      logTouch("pointer-down on pane", {
+        pointerType: event.pointerType,
+        targetTag: target.tagName,
+      });
+    };
+
+    const handlePointerUp = () => {
+      setTimeout(() => {
+        pointerDownOnElementRef.current = null;
+      }, 450);
+    };
+
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("pointerup", handlePointerUp, true);
+    document.addEventListener("pointercancel", handlePointerUp, true);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("pointerup", handlePointerUp, true);
+      document.removeEventListener("pointercancel", handlePointerUp, true);
+    };
+  }, []);
+
   const onConnect = useCallback(
     (connection: Connection) =>
       setEdges((eds) =>
@@ -245,7 +421,7 @@ function Editor() {
             ...connection,
             type: "labeledArrow",
             data: { label: "" },
-            label: "Select edge type",
+            label: "Select store type",
             markerEnd: EDGE_MARKER,
           },
           eds,
@@ -266,19 +442,111 @@ function Editor() {
 
   const onSelectionChange = useCallback(
     (selection: OnSelectionChangeParams<EnergyNode, EnergyEdge>) => {
+      const now = performance.now();
+      if (!selection.nodes.length && !selection.edges.length) {
+        if (now - selectionTimestampRef.current < 350) {
+          logTouch("selection-change ignored (recent selection)", {
+            elapsed: now - selectionTimestampRef.current,
+          });
+          return;
+        }
+      }
+      const selectedNodeIds = new Set(selection.nodes.map((node) => node.id));
+      const selectedEdgeIds = new Set(selection.edges.map((edge) => edge.id));
+      setNodes((current) =>
+        current.map((node) => {
+          const shouldSelect = selectedNodeIds.has(node.id);
+          if (node.selected === shouldSelect) return node;
+          return { ...node, selected: shouldSelect };
+        }),
+      );
+      setEdges((current) =>
+        current.map((edge) => {
+          const shouldSelect = selectedEdgeIds.has(edge.id);
+          if (edge.selected === shouldSelect) return edge;
+          return { ...edge, selected: shouldSelect };
+        }),
+      );
       setSelectedNodeId(selection.nodes[0]?.id ?? null);
       setSelectedEdgeId(selection.edges[0]?.id ?? null);
+      if (selection.nodes.length || selection.edges.length) {
+        selectionTimestampRef.current = now;
+      }
+      logTouch("selection-change", {
+        nodes: selection.nodes.map((node) => node.id),
+        edges: selection.edges.map((edge) => edge.id),
+      });
     },
-    [],
+    [logTouch, setEdges, setNodes],
   );
 
-  const clearSelection = useCallback(() => {
-    setSelectedNodeId(null);
-    setSelectedEdgeId(null);
-  }, []);
+  const handleNodeClick = useCallback(
+    (event: React.MouseEvent, node: EnergyNode) => {
+      event.stopPropagation();
+      selectNodeById(node.id, {
+        source: "click",
+        pointerType: (event.nativeEvent as PointerEvent).pointerType,
+      });
+    },
+    [selectNodeById],
+  );
+
+  const handleEdgeClick = useCallback(
+    (event: React.MouseEvent, edge: EnergyEdge) => {
+      event.stopPropagation();
+      selectEdgeById(edge.id, {
+        source: "click",
+        pointerType: (event.nativeEvent as PointerEvent).pointerType,
+      });
+    },
+    [selectEdgeById],
+  );
+
+  const handlePaneClick = useCallback(
+    (event: React.MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (!target) {
+        clearSelection();
+        return;
+      }
+
+      if (pointerDownOnElementRef.current) {
+        logTouch("pane-click ignored (pointer down on element)", {
+          pointerDown: pointerDownOnElementRef.current,
+        });
+        return;
+      }
+
+      const pointerType = (event.nativeEvent as PointerEvent).pointerType;
+      if (pointerType === "touch") {
+        const elapsed = performance.now() - selectionTimestampRef.current;
+        if (elapsed < 350) {
+          logTouch("pane-click ignored (recent selection)", { elapsed });
+          return;
+        }
+      }
+
+      if (
+        target.closest(".react-flow__node") ||
+        target.closest(".react-flow__edge") ||
+        target.closest(".react-flow__handle") ||
+        target.closest(".edge-label-wrapper")
+      ) {
+        logTouch("pane-click ignored (hit node/edge/handle/label)");
+        return;
+      }
+
+      logTouch("pane-click cleared selection");
+      clearSelection();
+    },
+    [clearSelection, logTouch],
+  );
 
   const onCreateNode = useCallback(
     (kind: EnergyNodeKind, position: XYPosition, dropTarget: DropTarget) => {
+      if (kind === "store" && dropTarget.type !== "container-body") {
+        return;
+      }
       const nextId = nodeIdRef.current;
       nodeIdRef.current += 1;
 
@@ -299,7 +567,8 @@ function Editor() {
 
       const newNode: EnergyNode = {
         id: `node-${nextId}`,
-        type: kind === "container" ? "container" : "store",
+        type:
+          kind === "container" ? "container" : kind === "store" ? "store" : "external",
         position: relativePosition,
         parentId,
         extent: parentId ? ("parent" as const) : undefined,
@@ -307,16 +576,35 @@ function Editor() {
         draggable: parentId ? false : undefined,
         data: {
           label:
-            kind === "container" ? "Unlabeled container" : "Select store type",
+            kind === "container"
+              ? "Unlabeled container"
+              : kind === "store"
+                ? "Select store type"
+                : "Unlabeled External",
           kind,
           storeType: kind === "store" ? "" : undefined,
         },
       };
 
-      setNodes((current) => updateContainerSizing(current.concat(newNode)));
+      setNodes((current) => {
+        const next = updateContainerSizing(current.concat(newNode));
+        return next.map((node) => ({
+          ...node,
+          selected: node.id === newNode.id,
+        }));
+      });
+      setEdges((current) =>
+        current.map((edge) => {
+          if (!edge.selected) return edge;
+          return { ...edge, selected: false };
+        }),
+      );
       setSelectedNodeId(newNode.id);
+      setSelectedEdgeId(null);
+      selectionTimestampRef.current = performance.now();
+      logTouch("select-node", { nodeId: newNode.id, source: "create-node" });
     },
-    [nodes, setNodes],
+    [logTouch, nodes, setEdges, setNodes],
   );
 
   const onLabelChange = useCallback(
@@ -361,7 +649,7 @@ function Editor() {
             ? {
                 ...edge,
                 data: { ...edge.data, label },
-                label: label || "Select edge type",
+                label: label || "Select store type",
               }
             : edge,
         ),
@@ -387,10 +675,16 @@ function Editor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onNodeClick={handleNodeClick}
+            onEdgeClick={handleEdgeClick}
             onSelectionChange={onSelectionChange}
-            onPaneClick={clearSelection}
+            onPaneClick={handlePaneClick}
             onMoveEnd={onMoveEnd}
             connectionMode={ConnectionMode.Loose}
+            nodeClickDistance={12}
+            nodeDragThreshold={10}
+            selectNodesOnDrag={false}
+            zoomOnDoubleClick={false}
             defaultViewport={{ x: 0, y: 0, zoom: 10 }}
             proOptions={{ hideAttribution: true }}
           >

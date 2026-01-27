@@ -14,7 +14,7 @@ export function BaseHandle({
       {...props}
       style={{ width: 12, height: 12, ...style }}
       className={cn(
-        "dark:border-secondary dark:bg-secondary rounded-full border border-slate-300 bg-slate-100 transition",
+        "rounded-full border border-slate-700 bg-slate-200 transition",
         className,
       )}
     >

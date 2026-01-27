@@ -36,6 +36,34 @@ type DnDContextType = {
 
 const DnDContext = createContext<DnDContextType | null>(null);
 
+const resolveDropTarget = (clientX: number, clientY: number) => {
+  const elementUnderPointer = document.elementFromPoint(clientX, clientY);
+  const isDroppingOnFlow = !!elementUnderPointer?.closest(".react-flow");
+  const containerBody = elementUnderPointer?.closest<HTMLElement>(
+    "[data-container-body='true']",
+  );
+  const containerId = containerBody?.dataset.nodeId;
+  const nodeElement = elementUnderPointer?.closest<HTMLElement>(
+    ".react-flow__node",
+  );
+  const parentIdFromNode = nodeElement?.dataset.parentId;
+  const containerIdFromNode = nodeElement?.dataset.containerId;
+  const resolvedContainerId =
+    containerId ?? parentIdFromNode ?? containerIdFromNode ?? null;
+  const dropTarget = resolvedContainerId
+    ? { type: "container-body" as const, nodeId: resolvedContainerId }
+    : isDroppingOnFlow
+      ? { type: "flow" as const }
+      : null;
+
+  return {
+    dropTarget,
+    isDroppingOnFlow,
+    containerBody,
+    resolvedContainerId,
+  };
+};
+
 export function DnDProvider({ children }: { children: React.ReactNode }) {
   const [isDragging, setIsDragging] = useState(false);
   const [dropAction, setDropAction] = useState<OnDropAction | null>(null);
@@ -83,27 +111,10 @@ export const useDnD = () => {
 
       (event.target as HTMLElement).releasePointerCapture(event.pointerId);
 
-      const elementUnderPointer = document.elementFromPoint(
-        event.clientX,
-        event.clientY,
-      );
-      const isDroppingOnFlow = elementUnderPointer?.closest(".react-flow");
-      const containerBody = elementUnderPointer?.closest<HTMLElement>(
-        "[data-container-body='true']",
-      );
-      const containerId = containerBody?.dataset.nodeId;
-      const nodeElement = elementUnderPointer?.closest<HTMLElement>(
-        ".react-flow__node",
-      );
-      const parentIdFromNode = nodeElement?.dataset.parentId;
-      const containerIdFromNode = nodeElement?.dataset.containerId;
-      const resolvedContainerId =
-        containerId ?? parentIdFromNode ?? containerIdFromNode;
-      const dropTarget: DropTarget = resolvedContainerId
-        ? { type: "container-body", nodeId: resolvedContainerId }
-        : { type: "flow" };
+      const { dropTarget, isDroppingOnFlow, containerBody, resolvedContainerId } =
+        resolveDropTarget(event.clientX, event.clientY);
 
-      if (isDroppingOnFlow) {
+      if (isDroppingOnFlow && dropTarget) {
         const containerBodyElement = resolvedContainerId
           ? document.querySelector<HTMLElement>(
               `[data-container-body='true'][data-node-id='${resolvedContainerId}']`,
@@ -137,6 +148,28 @@ export const useDnD = () => {
     };
   }, [onDragEnd, isDragging]);
 
+  useEffect(() => {
+    const body = document.body;
+    body.classList.toggle("dnd-active", isDragging);
+
+    if (!isDragging) return;
+
+    const preventTouchScroll = (event: TouchEvent) => {
+      if (event.cancelable) {
+        event.preventDefault();
+      }
+    };
+
+    document.addEventListener("touchmove", preventTouchScroll, {
+      passive: false,
+    });
+
+    return () => {
+      body.classList.remove("dnd-active");
+      document.removeEventListener("touchmove", preventTouchScroll);
+    };
+  }, [isDragging]);
+
   return {
     isDragging,
     onDragStart,
@@ -146,16 +179,20 @@ export const useDnD = () => {
 export const useDnDPosition = () => {
   const context = useContext(DnDContext);
   const [position, setPosition] = useState<XYPosition | null>(null);
+  const [dropTarget, setDropTarget] = useState<DropTarget | null>(null);
 
   useEffect(() => {
     if (!context?.isDragging) {
       setPosition(null);
+      setDropTarget(null);
       return;
     }
 
     const onDrag = (event: PointerEvent) => {
       event.preventDefault();
       setPosition({ x: event.clientX, y: event.clientY });
+      const resolved = resolveDropTarget(event.clientX, event.clientY);
+      setDropTarget(resolved.isDroppingOnFlow ? resolved.dropTarget : null);
     };
 
     document.addEventListener("pointermove", onDrag);
@@ -164,5 +201,5 @@ export const useDnDPosition = () => {
     };
   }, [context?.isDragging]);
 
-  return { position };
+  return { position, dropTarget };
 };

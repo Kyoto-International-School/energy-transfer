@@ -9,10 +9,18 @@
 
 .app-shell {
   height: 100vh;
+  min-height: 100svh;
+  height: 100dvh;
   display: grid;
   grid-template-columns: minmax(220px, 260px) minmax(0, 1fr) minmax(240px, 300px);
   gap: 16px;
   padding: 16px;
+}
+
+@media (max-width: 1366px) {
+  .app-shell {
+    grid-template-columns: minmax(180px, 220px) minmax(0, 1fr) minmax(190px, 230px);
+  }
 }
 
 .canvas {
@@ -33,6 +41,31 @@
 .flow-wrapper .react-flow {
   width: 100%;
   height: 100%;
+  --xy-handle-background-color: #e2e5e8;
+  --xy-handle-border-color: #3f4348;
+  --xy-edge-stroke-selected: var(--accent);
+}
+
+.flow-wrapper .react-flow__node {
+  touch-action: none;
+}
+
+.energy-node {
+  transition:
+    box-shadow 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.react-flow__node.selected .energy-node {
+  box-shadow:
+    0 0 0 2px rgba(43, 106, 119, 0.4),
+    0 0 18px rgba(43, 106, 119, 0.35);
+}
+
+.react-flow__edge.selected .react-flow__edge-path {
+  stroke: var(--accent);
+  stroke-width: 2.5;
+  filter: drop-shadow(0 0 6px rgba(43, 106, 119, 0.4));
 }
 
 .panel {
@@ -217,6 +250,18 @@
   box-shadow: 0 12px 24px rgba(16, 20, 24, 0.18);
 }
 
+.ghostnode__label {
+  margin: 0;
+  font-size: 0.95rem;
+}
+
+.ghostnode__hint {
+  margin: 4px 0 0;
+  font-size: 0.7rem;
+  font-weight: 500;
+  color: #9b1c1c;
+}
+
 .ghostnode--container {
   background: #fff3d4;
   border-color: #f2c671;
@@ -225,6 +270,22 @@
 .ghostnode--store {
   background: #e4f3f1;
   border-color: #72b7ae;
+}
+
+.ghostnode--external {
+  background: #eef2f7;
+  border-color: #9aa4b2;
+}
+
+.ghostnode--valid {
+  box-shadow: 0 12px 24px rgba(16, 20, 24, 0.18);
+}
+
+.ghostnode--invalid {
+  background: #fff1f1;
+  border-color: #f1a5a5;
+  color: #7a1d1d;
+  box-shadow: 0 16px 26px rgba(188, 59, 59, 0.25);
 }
 
 .inspector-grid {

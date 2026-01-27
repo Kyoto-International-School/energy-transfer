@@ -35,6 +35,11 @@ const items: SidebarItem[] = [
     label: "Store",
     description: "Represents stored energy.",
   },
+  {
+    kind: "external",
+    label: "External",
+    description: "Represents an input or output.",
+  },
 ];
 
 export function Sidebar({ onCreateNode }: SidebarProps) {
@@ -46,6 +51,13 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
       setActiveKind(null);
     }
   }, [isDragging]);
+
+  useEffect(() => {
+    const body = document.body;
+    const shouldShowNotAllowed = isDragging && activeKind === "store";
+    body.classList.toggle("dragging-store", shouldShowNotAllowed);
+    return () => body.classList.remove("dragging-store");
+  }, [activeKind, isDragging]);
 
   const createDropAction = useCallback(
     (kind: EnergyNodeKind): OnDropAction => {
@@ -103,18 +115,31 @@ type DragGhostProps = {
 };
 
 function DragGhost({ kind }: DragGhostProps) {
-  const { position } = useDnDPosition();
+  const { position, dropTarget } = useDnDPosition();
 
   if (!position || !kind) return null;
 
+  const isStore = kind === "store";
+  const isValidDrop = !isStore || dropTarget?.type === "container-body";
+  const statusClass = isStore
+    ? isValidDrop
+      ? "ghostnode--valid"
+      : "ghostnode--invalid"
+    : "";
+
   return (
     <div
-      className={`ghostnode ghostnode--${kind}`}
+      className={`ghostnode ghostnode--${kind} ${statusClass}`}
       style={{
         transform: `translate(${position.x}px, ${position.y}px) translate(-50%, -50%)`,
       }}
     >
-      {kind.charAt(0).toUpperCase() + kind.slice(1)}
+      <p className="ghostnode__label">
+        {kind.charAt(0).toUpperCase() + kind.slice(1)}
+      </p>
+      {isStore && !isValidDrop && (
+        <p className="ghostnode__hint">Drop into a container</p>
+      )}
     </div>
   );
 }

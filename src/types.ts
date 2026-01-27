@@ -1,8 +1,8 @@
 import type { Edge, Node } from "@xyflow/react";
 
-export type EnergyNodeKind = "container" | "store";
+export type EnergyNodeKind = "container" | "store" | "external";
 
-export type EnergyNodeType = "container" | "store";
+export type EnergyNodeType = "container" | "store" | "external";
 
 export const STORE_TYPE_OPTIONS = [
   "Thermal",
@@ -18,6 +18,7 @@ export const STORE_TYPE_OPTIONS = [
 export type StoreType = (typeof STORE_TYPE_OPTIONS)[number];
 
 export const EDGE_LABEL_OPTIONS = [
+  "(none)",
   "Mechanical",
   "Light/ Radiation",
   "Electrical",

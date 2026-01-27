@@ -1,11 +1,12 @@
 import type { IconType } from "react-icons";
-import { FaBatteryFull, FaCube } from "react-icons/fa";
+import { FaBatteryFull, FaCube, FaGlobeAsia } from "react-icons/fa";
 
 import type { EnergyNodeKind } from "../types";
 
 const componentTypeIcons: Record<EnergyNodeKind, IconType> = {
   container: FaCube,
   store: FaBatteryFull,
+  external: FaGlobeAsia,
 };
 
 type ComponentTypeIconProps = {

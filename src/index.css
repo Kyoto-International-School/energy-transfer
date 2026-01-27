@@ -60,6 +60,33 @@ body {
     linear-gradient(140deg, #f4f1eb 0%, #eef2f6 100%);
 }
 
+body.dnd-active {
+  overscroll-behavior: none;
+}
+
+body.dnd-active .panel--sidebar,
+body.dnd-active .library-item {
+  touch-action: none;
+}
+
+body.dragging-store,
+body.dragging-store * {
+  cursor: not-allowed !important;
+}
+
+body.dragging-store .flow-wrapper,
+body.dragging-store .react-flow,
+body.dragging-store .react-flow__pane,
+body.dragging-store .react-flow__renderer,
+body.dragging-store .react-flow__node {
+  cursor: not-allowed !important;
+}
+
+body.dragging-store [data-container-body="true"],
+body.dragging-store [data-container-body="true"] * {
+  cursor: copy !important;
+}
+
 button,
 input,
 select,
