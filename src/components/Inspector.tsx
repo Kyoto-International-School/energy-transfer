@@ -1,5 +1,5 @@
 import { useReactFlow, type Edge, type Node } from "@xyflow/react";
-import { FaArrowAltCircleRight, FaTrash } from "react-icons/fa";
+import { FaArrowAltCircleRight, FaSearch, FaTrash } from "react-icons/fa";
 import {
   EDGE_LABEL_OPTIONS,
   STORE_TYPE_OPTIONS,
@@ -158,7 +158,10 @@ export function Inspector({
   return (
     <aside className="panel panel--inspector">
       <div className="panel__header">
-        <p className="panel__eyebrow">Inspector</p>
+        <p className="panel__eyebrow panel__eyebrow--icon">
+          <FaSearch aria-hidden="true" />
+          Inspector
+        </p>
       </div>
       <div className="inspector__content">
         {selectedNode ? (

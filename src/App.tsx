@@ -21,6 +21,7 @@ import {
   type Viewport,
   type XYPosition,
 } from "@xyflow/react";
+import type { IsValidConnection } from "@xyflow/system";
 import "./App.css";
 
 import { Inspector } from "./components/Inspector";
@@ -430,6 +431,62 @@ function Editor() {
     [setEdges],
   );
 
+  const isValidConnection: IsValidConnection = useCallback(
+    (connection): boolean => {
+      if (!connection.source || !connection.target) return true;
+      const sourceNode = nodes.find((node) => node.id === connection.source);
+      const targetNode = nodes.find((node) => node.id === connection.target);
+      if (!sourceNode || !targetNode) return true;
+
+      const sourceKind = sourceNode.data.kind;
+      const targetKind = targetNode.data.kind;
+      const isLeftRightHandle = (handleId?: string | null) =>
+        handleId === "left" || handleId === "right";
+      const isVerticalHandle = (handleId?: string | null) =>
+        (handleId?.startsWith("top") || handleId?.startsWith("bottom")) ?? false;
+
+      const isExternalToStore =
+        sourceKind === "external" && targetKind === "store";
+      const isStoreToExternal =
+        sourceKind === "store" && targetKind === "external";
+
+      if (isExternalToStore) {
+        if (!connection.targetHandle) {
+          return true;
+        }
+        return isLeftRightHandle(connection.targetHandle);
+      }
+
+      if (isStoreToExternal) {
+        if (!connection.sourceHandle) {
+          return true;
+        }
+        return isLeftRightHandle(connection.sourceHandle);
+      }
+
+      const isStoreToStore =
+        sourceKind === "store" && targetKind === "store";
+      if (isStoreToStore) {
+        const sameContainer =
+          sourceNode.parentId !== undefined &&
+          sourceNode.parentId === targetNode.parentId;
+        if (!sameContainer) {
+          if (!connection.sourceHandle) return true;
+          if (!isLeftRightHandle(connection.sourceHandle)) return false;
+          if (!connection.targetHandle) return true;
+          return isLeftRightHandle(connection.targetHandle);
+        }
+        if (!connection.sourceHandle) return true;
+        if (!isVerticalHandle(connection.sourceHandle)) return false;
+        if (!connection.targetHandle) return true;
+        return isVerticalHandle(connection.targetHandle);
+      }
+
+      return true;
+    },
+    [nodes],
+  );
+
   const onNodesChange = useCallback(
     (changes: Parameters<typeof applyNodeChanges>[0]) => {
       setNodes((current) => {
@@ -675,15 +732,19 @@ function Editor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onNodeClick={handleNodeClick}
             onEdgeClick={handleEdgeClick}
             onSelectionChange={onSelectionChange}
             onPaneClick={handlePaneClick}
             onMoveEnd={onMoveEnd}
             connectionMode={ConnectionMode.Loose}
+            connectOnClick
             nodeClickDistance={12}
             nodeDragThreshold={10}
             selectNodesOnDrag={false}
+            panOnDrag={selectedNode?.data.kind === "store" ? [1, 2] : true}
+            connectionRadius={28}
             zoomOnDoubleClick={false}
             defaultViewport={{ x: 0, y: 0, zoom: 10 }}
             proOptions={{ hideAttribution: true }}

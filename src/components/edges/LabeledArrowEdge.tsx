@@ -178,13 +178,15 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
         id: edge.id,
         sourceNode,
         targetNode,
-        sourceHandle: edge.sourceHandle,
-        targetHandle: edge.targetHandle,
+        sourceHandle: edge.sourceHandle ?? null,
+        targetHandle: edge.targetHandle ?? null,
         connectionMode,
         onError,
       });
       if (!edgePosition) continue;
-      const edgeCurvature = edge.pathOptions?.curvature ?? DEFAULT_CURVATURE;
+      const edgeCurvature =
+        (edge as { pathOptions?: { curvature?: number } }).pathOptions
+          ?.curvature ?? DEFAULT_CURVATURE;
       const [, centerX, centerY] = getBezierPath({
         ...edgePosition,
         curvature: edgeCurvature,

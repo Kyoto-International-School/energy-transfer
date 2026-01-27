@@ -1,10 +1,6 @@
-import { memo, useMemo, useState, type CSSProperties } from "react";
-import {
-  Position,
-  useConnection,
-  useStore,
-  type NodeProps,
-} from "@xyflow/react";
+import { memo, useCallback, useMemo, useState, type CSSProperties } from "react";
+import { Position, useConnection, useStore, type NodeProps } from "@xyflow/react";
+import type { IsValidConnection } from "@xyflow/system";
 
 import { BaseNode } from "../base-node";
 import { BaseHandle } from "../base-handle";
@@ -20,11 +16,14 @@ export const StoreNode = memo(function StoreNode({
 }: NodeProps<EnergyNode>) {
   const storeLabel = data.storeType || data.label || "Select store type";
   const [isHovered, setIsHovered] = useState(false);
+  const nodes = useStore((state) => state.nodes);
   const edges = useStore((state) => state.edges);
   const connection = useConnection((state) => ({
     inProgress: state.inProgress,
     fromNode: state.fromNode,
     toNode: state.toNode,
+    fromHandle: state.fromHandle,
+    fromPosition: state.fromPosition,
   }));
   const usedHandleIds = useMemo(() => {
     const used = new Set<string>();
@@ -38,12 +37,79 @@ export const StoreNode = memo(function StoreNode({
     }
     return used;
   }, [edges, id]);
+  const currentNode = useMemo(
+    () => nodes.find((node) => node.id === id),
+    [id, nodes],
+  );
+  const currentParentId = currentNode?.parentId ?? null;
+  const currentY = currentNode?.position.y ?? 0;
+  const hasStoreAbove = useMemo(() => {
+    if (!currentNode) return false;
+    return nodes.some((node) => {
+      if (node.id === id) return false;
+      if (node.data?.kind !== "store") return false;
+      if (node.parentId !== currentParentId) return false;
+      const nodeY = node.position.y ?? 0;
+      return nodeY < currentY - 1;
+    });
+  }, [currentNode, currentParentId, currentY, id, nodes]);
+  const hasStoreBelow = useMemo(() => {
+    if (!currentNode) return false;
+    return nodes.some((node) => {
+      if (node.id === id) return false;
+      if (node.data?.kind !== "store") return false;
+      if (node.parentId !== currentParentId) return false;
+      const nodeY = node.position.y ?? 0;
+      return nodeY > currentY + 1;
+    });
+  }, [currentNode, currentParentId, currentY, id, nodes]);
   const isDraggingToStore =
     connection.inProgress && connection.toNode?.id === id;
   const isDraggingFromStore =
     connection.inProgress && connection.fromNode?.id === id;
+  const fromNodeKind = connection.fromNode?.data?.kind;
+  const fromNodeParentId = connection.fromNode?.parentId;
+  const fromHandleId = connection.fromHandle?.id;
+  const isConnectionFromStore = connection.inProgress && fromNodeKind === "store";
+  const isConnectionFromVerticalHandle =
+    connection.inProgress &&
+    (fromHandleId?.startsWith("top") ||
+      fromHandleId?.startsWith("bottom") ||
+      connection.fromPosition === Position.Top ||
+      connection.fromPosition === Position.Bottom);
   const showAllHandles =
-    !!selected || isHovered || isDraggingToStore || isDraggingFromStore;
+    !!selected ||
+    isHovered ||
+    connection.inProgress ||
+    isDraggingToStore ||
+    isDraggingFromStore;
+  const allowVerticalHandlesForConnection =
+    !connection.inProgress ||
+    (isConnectionFromStore &&
+      fromNodeParentId === currentParentId &&
+      isConnectionFromVerticalHandle);
+  const isConnectionFromSameContainerStore =
+    isConnectionFromStore && fromNodeParentId === currentParentId;
+  const isConnectionFromLeftRightHandle =
+    connection.inProgress &&
+    connection.fromNode?.id === id &&
+    (fromHandleId === "left" || fromHandleId === "right");
+  const allowLeftRightHandlesForConnection =
+    !connection.inProgress ||
+    !isConnectionFromSameContainerStore ||
+    isConnectionFromLeftRightHandle;
+  const allowTopHandles = hasStoreAbove && allowVerticalHandlesForConnection;
+  const allowBottomHandles = hasStoreBelow && allowVerticalHandlesForConnection;
+  const isValidVerticalConnection: IsValidConnection = useCallback(
+    (connection) => {
+      if (!connection.target) return true;
+      if (connection.target === id) return false;
+      const targetNode = nodes.find((node) => node.id === connection.target);
+      if (!targetNode || targetNode.data?.kind !== "store") return false;
+      return targetNode.parentId === currentParentId;
+    },
+    [currentParentId, id, nodes],
+  );
   const getHandleStyle = (
     isVisible: boolean,
     style?: CSSProperties,
@@ -62,43 +128,51 @@ export const StoreNode = memo(function StoreNode({
     >
       <p className="text-sm font-semibold text-slate-900">{storeLabel}</p>
 
-      <BaseHandle
-        id="left"
-        type="source"
-        position={Position.Left}
-        style={getHandleStyle(showAllHandles || usedHandleIds.has("left"))}
-      />
-      <BaseHandle
-        id="right"
-        type="source"
-        position={Position.Right}
-        style={getHandleStyle(showAllHandles || usedHandleIds.has("right"))}
-      />
+      {allowLeftRightHandlesForConnection && (
+        <BaseHandle
+          id="left"
+          type="source"
+          position={Position.Left}
+          style={getHandleStyle(showAllHandles || usedHandleIds.has("left"))}
+        />
+      )}
+      {allowLeftRightHandlesForConnection && (
+        <BaseHandle
+          id="right"
+          type="source"
+          position={Position.Right}
+          style={getHandleStyle(showAllHandles || usedHandleIds.has("right"))}
+        />
+      )}
 
-      {TOP_HANDLE_OFFSETS.map((offset, index) => (
-        <BaseHandle
-          key={`top-${offset}`}
-          id={`top-${index + 1}`}
-          type="source"
-          position={Position.Top}
-          style={getHandleStyle(
-            showAllHandles || usedHandleIds.has(`top-${index + 1}`),
-            { left: offset },
-          )}
-        />
-      ))}
-      {BOTTOM_HANDLE_OFFSETS.map((offset, index) => (
-        <BaseHandle
-          key={`bottom-${offset}`}
-          id={`bottom-${index + 1}`}
-          type="source"
-          position={Position.Bottom}
-          style={getHandleStyle(
-            showAllHandles || usedHandleIds.has(`bottom-${index + 1}`),
-            { left: offset },
-          )}
-        />
-      ))}
+      {allowTopHandles &&
+        TOP_HANDLE_OFFSETS.map((offset, index) => (
+          <BaseHandle
+            key={`top-${offset}`}
+            id={`top-${index + 1}`}
+            type="source"
+            position={Position.Top}
+            isValidConnection={isValidVerticalConnection}
+            style={getHandleStyle(
+              showAllHandles || usedHandleIds.has(`top-${index + 1}`),
+              { left: offset },
+            )}
+          />
+        ))}
+      {allowBottomHandles &&
+        BOTTOM_HANDLE_OFFSETS.map((offset, index) => (
+          <BaseHandle
+            key={`bottom-${offset}`}
+            id={`bottom-${index + 1}`}
+            type="source"
+            position={Position.Bottom}
+            isValidConnection={isValidVerticalConnection}
+            style={getHandleStyle(
+              showAllHandles || usedHandleIds.has(`bottom-${index + 1}`),
+              { left: offset },
+            )}
+          />
+        ))}
     </BaseNode>
   );
 });

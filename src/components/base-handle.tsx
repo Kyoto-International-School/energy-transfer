@@ -12,7 +12,7 @@ export function BaseHandle({
   return (
     <Handle
       {...props}
-      style={{ width: 12, height: 12, ...style }}
+      style={{ width: 18, height: 18, ...style }}
       className={cn(
         "rounded-full border border-slate-700 bg-slate-200 transition",
         className,

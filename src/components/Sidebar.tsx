@@ -8,6 +8,7 @@ import {
   type OnDropAction,
 } from "../dnd/useDnD";
 import type { EnergyNodeKind } from "../types";
+import { FaCubes } from "react-icons/fa";
 import { ComponentTypeIcon } from "./component-icons";
 
 type SidebarItem = {
@@ -45,6 +46,7 @@ const items: SidebarItem[] = [
 export function Sidebar({ onCreateNode }: SidebarProps) {
   const { isDragging, onDragStart } = useDnD();
   const [activeKind, setActiveKind] = useState<EnergyNodeKind | null>(null);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
     if (!isDragging) {
@@ -59,6 +61,12 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
     return () => body.classList.remove("dragging-store");
   }, [activeKind, isDragging]);
 
+  useEffect(() => {
+    const body = document.body;
+    body.classList.toggle("sidebar-collapsed", isCollapsed);
+    return () => body.classList.remove("sidebar-collapsed");
+  }, [isCollapsed]);
+
   const createDropAction = useCallback(
     (kind: EnergyNodeKind): OnDropAction => {
       return ({ position, dropTarget }) => {
@@ -72,11 +80,26 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
   return (
     <>
       {isDragging && <DragGhost kind={activeKind} />}
-      <aside className="panel panel--sidebar">
+      <aside
+        className={`panel panel--sidebar${isCollapsed ? " panel--collapsed" : ""}`}
+      >
         <div className="panel__header">
-          <p className="panel__eyebrow">Component Library</p>
+          <button
+            type="button"
+            className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
+            aria-expanded={!isCollapsed}
+            aria-controls="components-panel-list"
+            onClick={() => setIsCollapsed((current) => !current)}
+          >
+            <FaCubes aria-hidden="true" />
+            <span className="panel__eyebrow-text">Components</span>
+          </button>
         </div>
-        <div className="library-list">
+        <div
+          id="components-panel-list"
+          className="library-list"
+          hidden={isCollapsed}
+        >
           {items.map((item) => (
             <button
               key={item.kind}
