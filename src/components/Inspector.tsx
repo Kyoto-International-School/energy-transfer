@@ -9,13 +9,18 @@ import {
   type StoreType,
 } from "../types";
 import { ComponentTypeIcon } from "./component-icons";
+import { cn } from "@/lib/utils";
 
-type InspectorProps = {
+export type InspectorProps = {
   selectedNode: Node<EnergyNodeData> | null;
   selectedEdge: Edge<EnergyEdgeData> | null;
   onLabelChange: (label: string) => void;
   onStoreTypeChange: (storeType: StoreType | "") => void;
   onEdgeLabelChange: (label: EdgeLabel | "") => void;
+  variant?: "panel" | "section";
+  className?: string;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 };
 
 export function Inspector({
@@ -24,6 +29,10 @@ export function Inspector({
   onLabelChange,
   onStoreTypeChange,
   onEdgeLabelChange,
+  variant = "panel",
+  className,
+  isCollapsed = false,
+  onToggleCollapse,
 }: InspectorProps) {
   const { deleteElements, getNodes } = useReactFlow();
 
@@ -155,15 +164,38 @@ export function Inspector({
         }
       : null;
 
+  const Wrapper = variant === "panel" ? "aside" : "section";
+  const wrapperClass =
+    variant === "panel"
+      ? cn(
+          "panel panel--inspector",
+          isCollapsed && "panel--collapsed",
+          className,
+        )
+      : cn("panel__section panel__section--inspector", className);
+
   return (
-    <aside className="panel panel--inspector">
+    <Wrapper className={wrapperClass}>
       <div className="panel__header">
-        <p className="panel__eyebrow panel__eyebrow--icon">
-          <FaSearch aria-hidden="true" />
-          Inspector
-        </p>
+        {variant === "panel" ? (
+          <button
+            type="button"
+            className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
+            aria-expanded={!isCollapsed}
+            aria-controls="inspector-panel-content"
+            onClick={onToggleCollapse}
+          >
+            <FaSearch aria-hidden="true" />
+            <span className="panel__eyebrow-text">Inspector</span>
+          </button>
+        ) : (
+          <p className="panel__eyebrow panel__eyebrow--icon">
+            <FaSearch aria-hidden="true" />
+            <span className="panel__eyebrow-text">Inspector</span>
+          </p>
+        )}
       </div>
-      <div className="inspector__content">
+      <div className="inspector__content" id="inspector-panel-content">
         {selectedNode ? (
           renderNodeDetails()
         ) : selectedEdge ? (
@@ -184,6 +216,6 @@ export function Inspector({
           </button>
         </div>
       )}
-    </aside>
+    </Wrapper>
   );
 }

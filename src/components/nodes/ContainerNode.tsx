@@ -7,6 +7,7 @@ import {
   BaseNodeHeader,
   BaseNodeHeaderTitle,
 } from "../base-node";
+import { NodeDragHandle } from "../NodeDragHandle";
 import type { EnergyNode } from "../../types";
 
 export const ContainerNode = memo(function ContainerNode({
@@ -14,9 +15,10 @@ export const ContainerNode = memo(function ContainerNode({
   id,
 }: NodeProps<EnergyNode>) {
   return (
-    <BaseNode className="w-56 h-full flex flex-col container-node">
+    <BaseNode className="w-[168px] h-full flex flex-col container-node">
       <BaseNodeHeader className="container-node__header">
         <BaseNodeHeaderTitle>{data.label}</BaseNodeHeaderTitle>
+        <NodeDragHandle />
       </BaseNodeHeader>
       <BaseNodeContent
         className="min-h-16 flex-1 items-center justify-center text-center container-node__body"

@@ -24,12 +24,12 @@ import {
 import type { IsValidConnection } from "@xyflow/system";
 import "./App.css";
 
-import { Inspector } from "./components/Inspector";
 import { Sidebar } from "./components/Sidebar";
 import { ContainerNode } from "./components/nodes/ContainerNode";
 import { StoreNode } from "./components/nodes/StoreNode";
 import { ExternalNode } from "./components/nodes/ExternalNode";
 import { LabeledArrowEdge } from "./components/edges/LabeledArrowEdge";
+import { EasyConnectionLine } from "./components/edges/EasyConnectionLine";
 import { DnDProvider, type DropTarget } from "./dnd/useDnD";
 import { loadDiagram, saveDiagram } from "./storage";
 import type {
@@ -40,20 +40,36 @@ import type {
   StoreType,
 } from "./types";
 
-const CONTAINER_BASE_HEIGHT = 160;
-const CONTAINER_HEADER_HEIGHT = 48;
-const CONTAINER_WIDTH_FALLBACK = 224;
-const STORE_STACK_SPACING = 80;
-const STORE_ESTIMATED_HEIGHT = 60;
-const STORE_VERTICAL_PADDING = 24;
+const CONTAINER_LAYOUT = {
+  headerHeight: 36,
+  contentPaddingTop: 2,
+  contentPaddingBottom: 4,
+  storeHeight: 56,
+  storeGap: 64,
+  widthFallback: 168,
+};
 const EDGE_MARKER = {
   type: MarkerType.ArrowClosed,
   color: "#0f1a1c",
   width: 20,
   height: 20,
 };
+const DRAG_HANDLE_SELECTOR = ".node-drag-handle";
+const DRAG_HOLD_DELAY = 220;
+const DRAG_HOLD_CANCEL_DISTANCE = 6;
+const DRAG_HOLD_THRESHOLD = Number.POSITIVE_INFINITY;
 
 function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
+  const {
+    headerHeight,
+    contentPaddingTop,
+    contentPaddingBottom,
+    storeHeight,
+    storeGap,
+    widthFallback,
+  } = CONTAINER_LAYOUT;
+  const emptyHeight =
+    headerHeight + contentPaddingTop + contentPaddingBottom + storeHeight;
   const storeCounts = new Map<string, number>();
   const storesByParent = new Map<string, EnergyNode[]>();
   const containerMetrics = new Map<
@@ -77,64 +93,72 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
     if (node.data.kind !== "container") return;
     const storeCount = storeCounts.get(node.id) ?? 0;
     const height =
-      CONTAINER_BASE_HEIGHT +
-      Math.max(0, storeCount - 1) * STORE_STACK_SPACING +
-      (storeCount > 0 ? STORE_ESTIMATED_HEIGHT : 0);
-    const width =
-      node.measured?.width ?? node.width ?? CONTAINER_WIDTH_FALLBACK;
+      storeCount > 0
+        ? headerHeight +
+          contentPaddingTop +
+          contentPaddingBottom +
+          storeCount * storeHeight +
+          Math.max(0, storeCount - 1) * storeGap
+        : emptyHeight;
+    const width = node.measured?.width ?? node.width ?? widthFallback;
 
     containerMetrics.set(node.id, { width, height, storeCount });
   });
 
   return nodes.map((node) => {
+    const baseNode: EnergyNode = {
+      ...node,
+      dragHandle:
+        node.data.kind === "store"
+          ? undefined
+          : (node.dragHandle ?? DRAG_HANDLE_SELECTOR),
+    };
     if (node.data.kind === "store" && node.parentId) {
       const metrics = containerMetrics.get(node.parentId);
       const siblings = storesByParent.get(node.parentId) ?? [];
       const index = siblings.findIndex((store) => store.id === node.id);
-      const count = metrics?.storeCount ?? siblings.length;
-      const height = metrics?.height ?? CONTAINER_BASE_HEIGHT;
-      const width = metrics?.width ?? CONTAINER_WIDTH_FALLBACK;
-      const bodyHeight = Math.max(
-        height - CONTAINER_HEADER_HEIGHT,
-        STORE_ESTIMATED_HEIGHT,
-      );
-      const padding = STORE_ESTIMATED_HEIGHT / 2 + STORE_VERTICAL_PADDING;
-      const span = Math.max(bodyHeight - 2 * padding, 0);
-      const step = count > 1 ? span / (count - 1) : 0;
-      const y = CONTAINER_HEADER_HEIGHT + padding + step * Math.max(index, 0);
+      const width = metrics?.width ?? widthFallback;
+      const y =
+        headerHeight +
+        contentPaddingTop +
+        storeHeight / 2 +
+        Math.max(index, 0) * (storeHeight + storeGap);
       const x = width / 2;
       const extent: EnergyNode["extent"] = "parent";
       const origin: EnergyNode["origin"] = [0.5, 0.5];
 
       return {
-        ...node,
+        ...baseNode,
         position: { x, y },
         draggable: false,
         extent,
         origin,
         domAttributes: {
-          ...node.domAttributes,
+          ...baseNode.domAttributes,
           "data-parent-id": node.parentId,
         } as EnergyNode["domAttributes"],
       };
     }
-    if (node.data.kind !== "container") return node;
+    if (node.data.kind !== "container") return baseNode;
     const metrics = containerMetrics.get(node.id);
-    const height = metrics?.height ?? CONTAINER_BASE_HEIGHT;
+    const height = metrics?.height ?? emptyHeight;
 
     return {
-      ...node,
+      ...baseNode,
       style: {
-        ...node.style,
+        ...baseNode.style,
         height,
         minHeight: height,
+        "--container-header-height": `${headerHeight}px`,
+        "--container-content-pt": `${contentPaddingTop}px`,
+        "--container-content-pb": `${contentPaddingBottom}px`,
       },
       domAttributes: {
-        ...node.domAttributes,
+        ...baseNode.domAttributes,
         "data-container-id": node.id,
       } as EnergyNode["domAttributes"],
       data: {
-        ...node.data,
+        ...baseNode.data,
         storeCount: metrics?.storeCount ?? 0,
       },
     };
@@ -146,7 +170,7 @@ const initialNodes: EnergyNode[] = updateContainerSizing([
     id: "node-1",
     type: "container",
     position: { x: 120, y: 140 },
-    data: { label: "Unlabeled container", kind: "container" },
+    data: { label: "Unlabeled", kind: "container" },
     domAttributes: {
       "data-container-id": "node-1",
     } as EnergyNode["domAttributes"],
@@ -155,7 +179,7 @@ const initialNodes: EnergyNode[] = updateContainerSizing([
     id: "node-2",
     type: "store",
     position: { x: 380, y: 260 },
-    data: { label: "Select store type", kind: "store", storeType: "" },
+    data: { label: "Select store", kind: "store", storeType: "" },
   },
 ]);
 
@@ -168,7 +192,7 @@ const initialEdges: EnergyEdge[] = [
     target: "node-2",
     type: "labeledArrow",
     data: { label: "" },
-    label: "Select store type",
+    label: "Select transfer type",
     markerEnd: EDGE_MARKER,
   },
 ];
@@ -177,7 +201,7 @@ const normalizeEdges = (edges: EnergyEdge[]): EnergyEdge[] =>
   edges.map((edge) => ({
     ...edge,
     data: { label: edge.data?.label ?? "" },
-    label: edge.label ?? "Select store type",
+    label: edge.label ?? "Select transfer type",
     type: edge.type ?? "labeledArrow",
     markerEnd: edge.markerEnd ?? EDGE_MARKER,
     markerStart: undefined,
@@ -210,10 +234,19 @@ function Editor() {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [viewport, setViewportState] = useState<Viewport | null>(null);
+  const [dragHoldNodeId, setDragHoldNodeId] = useState<string | null>(null);
+  const [dragHoldActive, setDragHoldActive] = useState(false);
   const selectionTimestampRef = useRef(0);
   const pointerDownOnElementRef = useRef<"node" | "edge" | "handle" | null>(
     null,
   );
+  const dragHoldTimerRef = useRef<number | null>(null);
+  const dragHoldPointerIdRef = useRef<number | null>(null);
+  const dragHoldStartRef = useRef<{ x: number; y: number } | null>(null);
+  const dragHoldStateRef = useRef<{ active: boolean; nodeId: string | null }>({
+    active: false,
+    nodeId: null,
+  });
   const debugTouch = useMemo(() => {
     if (typeof window === "undefined") return false;
     if ((window as { DEBUG_TOUCH?: boolean }).DEBUG_TOUCH) return true;
@@ -234,6 +267,24 @@ function Editor() {
       }
     },
     [debugTouch],
+  );
+
+  const clearDragHold = useCallback(
+    (reason?: string) => {
+      if (dragHoldTimerRef.current) {
+        window.clearTimeout(dragHoldTimerRef.current);
+        dragHoldTimerRef.current = null;
+      }
+      dragHoldPointerIdRef.current = null;
+      dragHoldStartRef.current = null;
+      if (dragHoldStateRef.current.active || dragHoldStateRef.current.nodeId) {
+        logTouch("drag-hold cleared", { reason });
+      }
+      dragHoldStateRef.current = { active: false, nodeId: null };
+      setDragHoldActive(false);
+      setDragHoldNodeId(null);
+    },
+    [logTouch],
   );
 
   const selectNodeById = useCallback(
@@ -314,6 +365,20 @@ function Editor() {
     () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
     [edges, selectedEdgeId],
   );
+  const renderedNodes = useMemo(() => {
+    if (!dragHoldNodeId) return nodes;
+    return nodes.map((node) => {
+      if (node.id !== dragHoldNodeId) return node;
+      const existing = node.className ?? "";
+      if (existing.split(" ").includes("node-drag-hold")) {
+        return node;
+      }
+      const className = existing
+        ? `${existing} node-drag-hold`
+        : "node-drag-hold";
+      return { ...node, className };
+    });
+  }, [dragHoldNodeId, nodes]);
 
   useEffect(() => {
     const saved = loadDiagram();
@@ -339,15 +404,52 @@ function Editor() {
   }, [nodes]);
 
   useEffect(() => {
+    dragHoldStateRef.current = {
+      active: dragHoldActive,
+      nodeId: dragHoldNodeId,
+    };
+  }, [dragHoldActive, dragHoldNodeId]);
+
+  useEffect(() => {
     const handlePointerDown = (event: PointerEvent) => {
       const target = event.target as HTMLElement | null;
       const targetNode = target?.closest(".react-flow__node");
       const targetEdge = target?.closest(".react-flow__edge");
       const targetHandle = target?.closest(".react-flow__handle");
+      const dragHandle = target?.closest(".node-drag-handle");
       if (!target) {
         pointerDownOnElementRef.current = null;
         logTouch("pointer-down (no target)", {
           pointerType: event.pointerType,
+        });
+        return;
+      }
+
+      if (dragHandle && event.isPrimary && event.button === 0) {
+        const nodeId = dragHandle
+          .closest(".react-flow__node")
+          ?.getAttribute("data-id");
+        if (nodeId) {
+          clearDragHold("restart");
+          dragHoldPointerIdRef.current = event.pointerId;
+          dragHoldStartRef.current = { x: event.clientX, y: event.clientY };
+          dragHoldTimerRef.current = window.setTimeout(() => {
+            if (dragHoldPointerIdRef.current !== event.pointerId) return;
+            dragHoldTimerRef.current = null;
+            setDragHoldActive(true);
+            setDragHoldNodeId(nodeId);
+            dragHoldStateRef.current = { active: true, nodeId };
+            logTouch("drag-hold active", { nodeId });
+          }, DRAG_HOLD_DELAY);
+        }
+      }
+
+      if (targetHandle) {
+        pointerDownOnElementRef.current = "handle";
+        logTouch("pointer-down on handle", {
+          pointerType: event.pointerType,
+          handleId: targetHandle.getAttribute("data-handleid"),
+          nodeId: targetHandle.getAttribute("data-nodeid"),
         });
         return;
       }
@@ -358,12 +460,6 @@ function Editor() {
           pointerType: event.pointerType,
           nodeId: targetNode.getAttribute("data-id"),
         });
-        if (event.pointerType === "touch") {
-          const nodeId = targetNode.getAttribute("data-id");
-          if (nodeId) {
-            selectNodeById(nodeId, { source: "pointerdown-touch" });
-          }
-        }
         return;
       }
       if (targetEdge) {
@@ -371,21 +467,6 @@ function Editor() {
         logTouch("pointer-down on edge", {
           pointerType: event.pointerType,
           edgeId: targetEdge.getAttribute("data-id"),
-        });
-        if (event.pointerType === "touch") {
-          const edgeId = targetEdge.getAttribute("data-id");
-          if (edgeId) {
-            selectEdgeById(edgeId, { source: "pointerdown-touch" });
-          }
-        }
-        return;
-      }
-      if (targetHandle) {
-        pointerDownOnElementRef.current = "handle";
-        logTouch("pointer-down on handle", {
-          pointerType: event.pointerType,
-          handleId: targetHandle.getAttribute("data-handleid"),
-          nodeId: targetHandle.getAttribute("data-nodeid"),
         });
         return;
       }
@@ -397,22 +478,37 @@ function Editor() {
       });
     };
 
+    const handlePointerMove = (event: PointerEvent) => {
+      if (!dragHoldTimerRef.current) return;
+      if (dragHoldPointerIdRef.current !== event.pointerId) return;
+      const start = dragHoldStartRef.current;
+      if (!start) return;
+      const dx = event.clientX - start.x;
+      const dy = event.clientY - start.y;
+      if (Math.hypot(dx, dy) > DRAG_HOLD_CANCEL_DISTANCE) {
+        clearDragHold("move-threshold");
+      }
+    };
+
     const handlePointerUp = () => {
+      clearDragHold("pointer-up");
       setTimeout(() => {
         pointerDownOnElementRef.current = null;
       }, 450);
     };
 
     document.addEventListener("pointerdown", handlePointerDown, true);
+    document.addEventListener("pointermove", handlePointerMove, true);
     document.addEventListener("pointerup", handlePointerUp, true);
     document.addEventListener("pointercancel", handlePointerUp, true);
 
     return () => {
       document.removeEventListener("pointerdown", handlePointerDown, true);
+      document.removeEventListener("pointermove", handlePointerMove, true);
       document.removeEventListener("pointerup", handlePointerUp, true);
       document.removeEventListener("pointercancel", handlePointerUp, true);
     };
-  }, []);
+  }, [clearDragHold, logTouch]);
 
   const onConnect = useCallback(
     (connection: Connection) =>
@@ -422,7 +518,7 @@ function Editor() {
             ...connection,
             type: "labeledArrow",
             data: { label: "" },
-            label: "Select store type",
+            label: "Select transfer type",
             markerEnd: EDGE_MARKER,
           },
           eds,
@@ -434,55 +530,59 @@ function Editor() {
   const isValidConnection: IsValidConnection = useCallback(
     (connection): boolean => {
       if (!connection.source || !connection.target) return true;
+      if (connection.source === connection.target) return false;
       const sourceNode = nodes.find((node) => node.id === connection.source);
       const targetNode = nodes.find((node) => node.id === connection.target);
       if (!sourceNode || !targetNode) return true;
 
       const sourceKind = sourceNode.data.kind;
       const targetKind = targetNode.data.kind;
-      const isLeftRightHandle = (handleId?: string | null) =>
-        handleId === "left" || handleId === "right";
-      const isVerticalHandle = (handleId?: string | null) =>
-        (handleId?.startsWith("top") || handleId?.startsWith("bottom")) ?? false;
+
+      if (sourceKind === "container" || targetKind === "container") {
+        return false;
+      }
 
       const isExternalToStore =
         sourceKind === "external" && targetKind === "store";
       const isStoreToExternal =
         sourceKind === "store" && targetKind === "external";
+      const isStoreToStore = sourceKind === "store" && targetKind === "store";
 
-      if (isExternalToStore) {
-        if (!connection.targetHandle) {
-          return true;
-        }
-        return isLeftRightHandle(connection.targetHandle);
-      }
-
-      if (isStoreToExternal) {
-        if (!connection.sourceHandle) {
-          return true;
-        }
-        return isLeftRightHandle(connection.sourceHandle);
-      }
-
-      const isStoreToStore =
-        sourceKind === "store" && targetKind === "store";
       if (isStoreToStore) {
-        const sameContainer =
-          sourceNode.parentId !== undefined &&
-          sourceNode.parentId === targetNode.parentId;
-        if (!sameContainer) {
-          if (!connection.sourceHandle) return true;
-          if (!isLeftRightHandle(connection.sourceHandle)) return false;
-          if (!connection.targetHandle) return true;
-          return isLeftRightHandle(connection.targetHandle);
+        const inSameContainer =
+          !!sourceNode.parentId && sourceNode.parentId === targetNode.parentId;
+
+        if (inSameContainer) {
+          const siblings = nodes
+            .filter(
+              (node) =>
+                node.data.kind === "store" &&
+                node.parentId === sourceNode.parentId,
+            )
+            .sort((a, b) => {
+              if (a.position.y !== b.position.y) {
+                return a.position.y - b.position.y;
+              }
+              if (a.position.x !== b.position.x) {
+                return a.position.x - b.position.x;
+              }
+              return a.id.localeCompare(b.id);
+            });
+          const sourceIndex = siblings.findIndex(
+            (node) => node.id === sourceNode.id,
+          );
+          const targetIndex = siblings.findIndex(
+            (node) => node.id === targetNode.id,
+          );
+          if (sourceIndex === -1 || targetIndex === -1) {
+            return false;
+          }
+
+          return Math.abs(sourceIndex - targetIndex) === 1;
         }
-        if (!connection.sourceHandle) return true;
-        if (!isVerticalHandle(connection.sourceHandle)) return false;
-        if (!connection.targetHandle) return true;
-        return isVerticalHandle(connection.targetHandle);
       }
 
-      return true;
+      return isExternalToStore || isStoreToExternal || isStoreToStore;
     },
     [nodes],
   );
@@ -625,7 +725,11 @@ function Editor() {
       const newNode: EnergyNode = {
         id: `node-${nextId}`,
         type:
-          kind === "container" ? "container" : kind === "store" ? "store" : "external",
+          kind === "container"
+            ? "container"
+            : kind === "store"
+              ? "store"
+              : "external",
         position: relativePosition,
         parentId,
         extent: parentId ? ("parent" as const) : undefined,
@@ -634,10 +738,10 @@ function Editor() {
         data: {
           label:
             kind === "container"
-              ? "Unlabeled container"
+              ? "Unlabeled"
               : kind === "store"
-                ? "Select store type"
-                : "Unlabeled External",
+                ? "Select store"
+                : "Unlabeled",
           kind,
           storeType: kind === "store" ? "" : undefined,
         },
@@ -683,7 +787,7 @@ function Editor() {
     (storeType: StoreType | "") => {
       if (!selectedNodeId) return;
 
-      const label = storeType || "Select store type";
+      const label = storeType || "Select store";
 
       setNodes((current) =>
         current.map((node) =>
@@ -706,7 +810,7 @@ function Editor() {
             ? {
                 ...edge,
                 data: { ...edge.data, label },
-                label: label || "Select store type",
+                label: label || "Select transfer type",
               }
             : edge,
         ),
@@ -721,11 +825,20 @@ function Editor() {
 
   return (
     <div className="app-shell">
-      <Sidebar onCreateNode={onCreateNode} />
+      <Sidebar
+        onCreateNode={onCreateNode}
+        inspectorProps={{
+          selectedNode,
+          selectedEdge,
+          onLabelChange,
+          onStoreTypeChange,
+          onEdgeLabelChange,
+        }}
+      />
       <main className="canvas">
         <div className="flow-wrapper">
           <ReactFlow<EnergyNode, EnergyEdge>
-            nodes={nodes}
+            nodes={renderedNodes}
             edges={edges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
@@ -739,12 +852,12 @@ function Editor() {
             onPaneClick={handlePaneClick}
             onMoveEnd={onMoveEnd}
             connectionMode={ConnectionMode.Loose}
-            connectOnClick
             nodeClickDistance={12}
-            nodeDragThreshold={10}
+            nodeDragThreshold={dragHoldActive ? 0 : DRAG_HOLD_THRESHOLD}
             selectNodesOnDrag={false}
             panOnDrag={selectedNode?.data.kind === "store" ? [1, 2] : true}
             connectionRadius={28}
+            connectionLineComponent={EasyConnectionLine}
             zoomOnDoubleClick={false}
             defaultViewport={{ x: 0, y: 0, zoom: 10 }}
             proOptions={{ hideAttribution: true }}
@@ -755,13 +868,6 @@ function Editor() {
           </ReactFlow>
         </div>
       </main>
-      <Inspector
-        selectedNode={selectedNode}
-        selectedEdge={selectedEdge}
-        onLabelChange={onLabelChange}
-        onStoreTypeChange={onStoreTypeChange}
-        onEdgeLabelChange={onEdgeLabelChange}
-      />
     </div>
   );
 }

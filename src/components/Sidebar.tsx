@@ -10,6 +10,7 @@ import {
 import type { EnergyNodeKind } from "../types";
 import { FaCubes } from "react-icons/fa";
 import { ComponentTypeIcon } from "./component-icons";
+import { Inspector, type InspectorProps } from "./Inspector";
 
 type SidebarItem = {
   kind: EnergyNodeKind;
@@ -23,6 +24,7 @@ type SidebarProps = {
     position: XYPosition,
     dropTarget: DropTarget,
   ) => void;
+  inspectorProps: InspectorProps;
 };
 
 const items: SidebarItem[] = [
@@ -43,7 +45,7 @@ const items: SidebarItem[] = [
   },
 ];
 
-export function Sidebar({ onCreateNode }: SidebarProps) {
+export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
   const { isDragging, onDragStart } = useDnD();
   const [activeKind, setActiveKind] = useState<EnergyNodeKind | null>(null);
   const [isCollapsed, setIsCollapsed] = useState(false);
@@ -80,54 +82,63 @@ export function Sidebar({ onCreateNode }: SidebarProps) {
   return (
     <>
       {isDragging && <DragGhost kind={activeKind} />}
-      <aside
-        className={`panel panel--sidebar${isCollapsed ? " panel--collapsed" : ""}`}
-      >
-        <div className="panel__header">
-          <button
-            type="button"
-            className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
-            aria-expanded={!isCollapsed}
-            aria-controls="components-panel-list"
-            onClick={() => setIsCollapsed((current) => !current)}
-          >
-            <FaCubes aria-hidden="true" />
-            <span className="panel__eyebrow-text">Components</span>
-          </button>
-        </div>
-        <div
-          id="components-panel-list"
-          className="library-list"
-          hidden={isCollapsed}
+      <aside className="sidebar">
+        <section
+          className={`panel panel--sidebar${isCollapsed ? " panel--collapsed" : ""}`}
         >
-          {items.map((item) => (
+          <div className="panel__header">
             <button
-              key={item.kind}
               type="button"
-              className="library-item"
-              data-node-kind={item.kind}
-              onPointerDown={(event) => {
-                setActiveKind(item.kind);
-                onDragStart(event, createDropAction(item.kind));
-              }}
+              className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
+              aria-expanded={!isCollapsed}
+              aria-controls="components-panel-list"
+              onClick={() => setIsCollapsed((current) => !current)}
             >
-              <div className="library-item__content">
-                <span className="library-item__icon" aria-hidden="true">
-                  <ComponentTypeIcon
-                    kind={item.kind}
-                    className="library-item__icon-svg"
-                  />
-                </span>
-                <div>
-                  <p className="library-item__label">{item.label}</p>
-                  <p className="library-item__description">
-                    {item.description}
-                  </p>
-                </div>
-              </div>
+              <FaCubes aria-hidden="true" />
+              <span className="panel__eyebrow-text">Components</span>
             </button>
-          ))}
-        </div>
+          </div>
+          <div
+            id="components-panel-list"
+            className="library-list"
+            hidden={isCollapsed}
+          >
+            {items.map((item) => (
+              <button
+                key={item.kind}
+                type="button"
+                className="library-item"
+                data-node-kind={item.kind}
+                onPointerDown={(event) => {
+                  setActiveKind(item.kind);
+                  onDragStart(event, createDropAction(item.kind));
+                }}
+              >
+                <div className="library-item__content">
+                  <span className="library-item__icon" aria-hidden="true">
+                    <ComponentTypeIcon
+                      kind={item.kind}
+                      className="library-item__icon-svg"
+                    />
+                  </span>
+                  <div>
+                    <p className="library-item__label">{item.label}</p>
+                    <p className="library-item__description">
+                      {item.description}
+                    </p>
+                  </div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </section>
+        <Inspector
+          {...inspectorProps}
+          variant="panel"
+          className="panel--inspector"
+          isCollapsed={isCollapsed}
+          onToggleCollapse={() => setIsCollapsed((current) => !current)}
+        />
       </aside>
     </>
   );

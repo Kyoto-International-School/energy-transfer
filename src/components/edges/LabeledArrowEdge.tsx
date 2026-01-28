@@ -7,7 +7,8 @@ import {
   useStore,
   type EdgeProps,
 } from "@xyflow/react";
-import { getEdgePosition } from "@xyflow/system";
+
+import { getEdgeParams, getNodeRect } from "@/lib/edge-utils";
 
 import type { EnergyEdge } from "../../types";
 
@@ -16,6 +17,8 @@ const LABEL_MARGIN = 6;
 const MARKER_RADIUS = 10;
 const MIN_LABEL_OFFSET = 16;
 const NEIGHBOR_RADIUS = 140;
+const PARALLEL_EDGE_SPACING = 24;
+const PARALLEL_EDGE_PADDING = 10;
 
 const calculateControlOffset = (distance: number, curvature: number) => {
   if (distance >= 0) {
@@ -48,6 +51,8 @@ const getControlWithCurvature = (
 
 export const LabeledArrowEdge = memo(function LabeledArrowEdge({
   id,
+  source,
+  target,
   sourceX,
   sourceY,
   targetX,
@@ -65,19 +70,76 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
   const [labelSize, setLabelSize] = useState({ width: 0, height: 0 });
   const edges = useStore((state) => state.edges);
   const nodeLookup = useStore((state) => state.nodeLookup);
-  const connectionMode = useStore((state) => state.connectionMode);
-  const onError = useStore((state) => state.onError);
   const curvature = pathOptions?.curvature ?? DEFAULT_CURVATURE;
+  const sourceNode = nodeLookup.get(source);
+  const targetNode = nodeLookup.get(target);
+  const edgeParams =
+    sourceNode && targetNode ? getEdgeParams(sourceNode, targetNode) : null;
+  let resolvedSourceX = edgeParams?.sx ?? sourceX;
+  const resolvedSourceY = edgeParams?.sy ?? sourceY;
+  let resolvedTargetX = edgeParams?.tx ?? targetX;
+  const resolvedTargetY = edgeParams?.ty ?? targetY;
+  const resolvedSourcePosition = edgeParams?.sourcePos ?? sourcePosition;
+  const resolvedTargetPosition = edgeParams?.targetPos ?? targetPosition;
+  const isIntraContainer =
+    !!sourceNode?.parentId && sourceNode.parentId === targetNode?.parentId;
+
+  const getNodeKind = (
+    node: (typeof sourceNode | typeof targetNode) | undefined,
+  ) => (node?.data as { kind?: unknown } | undefined)?.kind;
+  const isStoreToStore =
+    getNodeKind(sourceNode) === "store" &&
+    getNodeKind(targetNode) === "store";
+
+  if (isIntraContainer && isStoreToStore && sourceNode && targetNode && edgeParams) {
+    const pairKey = [source, target].sort().join("::");
+    const parallelEdges = edges.filter((edge) => {
+      if (!edge.source || !edge.target) return false;
+      const edgeKey = [edge.source, edge.target].sort().join("::");
+      if (edgeKey !== pairKey) return false;
+      const edgeSourceNode = nodeLookup.get(edge.source);
+      const edgeTargetNode = nodeLookup.get(edge.target);
+      if (!edgeSourceNode || !edgeTargetNode) return false;
+      if (!edgeSourceNode.parentId) return false;
+      if (edgeSourceNode.parentId !== edgeTargetNode.parentId) return false;
+      const sourceKind = getNodeKind(edgeSourceNode);
+      const targetKind = getNodeKind(edgeTargetNode);
+      return sourceKind === "store" && targetKind === "store";
+    });
+
+    if (parallelEdges.length > 1) {
+      parallelEdges.sort((a, b) => a.id.localeCompare(b.id));
+      const index = parallelEdges.findIndex((edge) => edge.id === id);
+      if (index >= 0) {
+        const centerIndex = (parallelEdges.length - 1) / 2;
+        const offset = (index - centerIndex) * PARALLEL_EDGE_SPACING;
+        const sourceRect = getNodeRect(sourceNode);
+        const targetRect = getNodeRect(targetNode);
+        const clamp = (value: number, min: number, max: number) =>
+          Math.min(Math.max(value, min), max);
+        resolvedSourceX = clamp(
+          edgeParams.sx + offset,
+          sourceRect.x + PARALLEL_EDGE_PADDING,
+          sourceRect.x + sourceRect.width - PARALLEL_EDGE_PADDING,
+        );
+        resolvedTargetX = clamp(
+          edgeParams.tx + offset,
+          targetRect.x + PARALLEL_EDGE_PADDING,
+          targetRect.x + targetRect.width - PARALLEL_EDGE_PADDING,
+        );
+      }
+    }
+  }
   const [edgePath, labelX, labelY] = getBezierPath({
-    sourceX,
-    sourceY,
-    sourcePosition,
-    targetX,
-    targetY,
-    targetPosition,
+    sourceX: resolvedSourceX,
+    sourceY: resolvedSourceY,
+    sourcePosition: resolvedSourcePosition,
+    targetX: resolvedTargetX,
+    targetY: resolvedTargetY,
+    targetPosition: resolvedTargetPosition,
     curvature,
   });
-  const labelText = data?.label || label || "Select store type";
+  const labelText = data?.label || label || "Select transfer type";
 
   useLayoutEffect(() => {
     const element = labelRef.current;
@@ -99,43 +161,39 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
     return () => observer.disconnect();
   }, [labelText]);
   const [sourceControlX, sourceControlY] = getControlWithCurvature(
-    sourcePosition,
-    sourceX,
-    sourceY,
-    targetX,
-    targetY,
+    resolvedSourcePosition,
+    resolvedSourceX,
+    resolvedSourceY,
+    resolvedTargetX,
+    resolvedTargetY,
     curvature,
   );
   const [targetControlX, targetControlY] = getControlWithCurvature(
-    targetPosition,
-    targetX,
-    targetY,
-    sourceX,
-    sourceY,
+    resolvedTargetPosition,
+    resolvedTargetX,
+    resolvedTargetY,
+    resolvedSourceX,
+    resolvedSourceY,
     curvature,
   );
   const t = 0.5;
   const oneMinusT = 1 - t;
   const tangentX =
-    3 * oneMinusT * oneMinusT * (sourceControlX - sourceX) +
+    3 * oneMinusT * oneMinusT * (sourceControlX - resolvedSourceX) +
     6 * oneMinusT * t * (targetControlX - sourceControlX) +
-    3 * t * t * (targetX - targetControlX);
+    3 * t * t * (resolvedTargetX - targetControlX);
   const tangentY =
-    3 * oneMinusT * oneMinusT * (sourceControlY - sourceY) +
+    3 * oneMinusT * oneMinusT * (sourceControlY - resolvedSourceY) +
     6 * oneMinusT * t * (targetControlY - sourceControlY) +
-    3 * t * t * (targetY - targetControlY);
-  const fallbackDX = targetX - sourceX;
-  const fallbackDY = targetY - sourceY;
+    3 * t * t * (resolvedTargetY - targetControlY);
+  const fallbackDX = resolvedTargetX - resolvedSourceX;
+  const fallbackDY = resolvedTargetY - resolvedSourceY;
+  const isHorizontal = Math.abs(fallbackDX) >= Math.abs(fallbackDY);
   const safeTangentX = Math.abs(tangentX) > 0.0001 ? tangentX : fallbackDX;
   const safeTangentY = Math.abs(tangentY) > 0.0001 ? tangentY : fallbackDY;
   const safeTangentLength = Math.hypot(safeTangentX, safeTangentY) || 1;
   const baseNormalX = -safeTangentY / safeTangentLength;
   const baseNormalY = safeTangentX / safeTangentLength;
-  const currentEdge = edges.find((edge) => edge.id === id);
-  const sourceNode = currentEdge ? nodeLookup.get(currentEdge.source) : null;
-  const targetNode = currentEdge ? nodeLookup.get(currentEdge.target) : null;
-  const isIntraContainer =
-    !!sourceNode?.parentId && sourceNode.parentId === targetNode?.parentId;
   let labelPosX = labelX;
   let labelPosY = labelY;
 
@@ -148,7 +206,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
       normalY = -normalY;
     }
 
-    const labelOffset = 16;
+    const labelOffset = isHorizontal ? 24 : 16;
     labelPosX = labelX + normalX * labelOffset;
     labelPosY = labelY + normalY * labelOffset;
   } else {
@@ -171,24 +229,20 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
 
     for (const edge of edges) {
       if (!edge.source || !edge.target) continue;
-      const sourceNode = nodeLookup.get(edge.source);
-      const targetNode = nodeLookup.get(edge.target);
-      if (!sourceNode || !targetNode) continue;
-      const edgePosition = getEdgePosition({
-        id: edge.id,
-        sourceNode,
-        targetNode,
-        sourceHandle: edge.sourceHandle ?? null,
-        targetHandle: edge.targetHandle ?? null,
-        connectionMode,
-        onError,
-      });
-      if (!edgePosition) continue;
+      const edgeSourceNode = nodeLookup.get(edge.source);
+      const edgeTargetNode = nodeLookup.get(edge.target);
+      if (!edgeSourceNode || !edgeTargetNode) continue;
+      const edgePosition = getEdgeParams(edgeSourceNode, edgeTargetNode);
       const edgeCurvature =
         (edge as { pathOptions?: { curvature?: number } }).pathOptions
           ?.curvature ?? DEFAULT_CURVATURE;
       const [, centerX, centerY] = getBezierPath({
-        ...edgePosition,
+        sourceX: edgePosition.sx,
+        sourceY: edgePosition.sy,
+        sourcePosition: edgePosition.sourcePos,
+        targetX: edgePosition.tx,
+        targetY: edgePosition.ty,
+        targetPosition: edgePosition.targetPos,
         curvature: edgeCurvature,
       });
       markerPositions.push({ id: edge.id, x: centerX, y: centerY });
@@ -257,8 +311,8 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
     labelPosY = labelY + normalY * finalOffset;
   }
   const markerLength = 16;
-  const markerDirX = targetX - labelX;
-  const markerDirY = targetY - labelY;
+  const markerDirX = resolvedTargetX - labelX;
+  const markerDirY = resolvedTargetY - labelY;
   const markerDirLength = Math.hypot(markerDirX, markerDirY);
   const markerUnitX =
     markerDirLength > 0.0001
