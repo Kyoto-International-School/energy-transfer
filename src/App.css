@@ -65,6 +65,14 @@ body.sidebar-collapsed .app-shell {
   touch-action: none;
 }
 
+.react-flow__minimap.minimap-toggle {
+  cursor: zoom-in;
+}
+
+.react-flow__minimap.minimap-toggle--large {
+  cursor: zoom-out;
+}
+
 .react-flow__node-container {
   pointer-events: none;
 }
@@ -150,17 +158,17 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 }
 
 .node-drag-handle--external-inline {
-  position: relative;
+  position: static;
   display: inline-flex;
-  width: 16px;
-  height: 16px;
-  border-radius: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
   flex-shrink: 0;
 }
 
 .node-drag-handle--external-inline .node-drag-handle__icon {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
 }
 
 .external-node__label {
@@ -229,7 +237,8 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 }
 
 .panel--sidebar {
-  align-self: flex-start;
+  align-self: stretch;
+  width: 100%;
 }
 
 .panel--inspector {
@@ -380,9 +389,16 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 }
 .library-item__content {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+  width: 100%;
+}
+
+.library-item__header {
+  display: flex;
   align-items: center;
   gap: 12px;
-  width: 100%;
 }
 
 .library-item__icon {
@@ -411,7 +427,7 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 .library-item {
   border: 1px solid transparent;
   border-radius: 16px;
-  padding: 12px 14px;
+  padding: 8px 12px;
   background: #f7f7f8;
   display: flex;
   align-items: center;
@@ -443,8 +459,8 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 }
 
 .library-item__description {
-  margin: 4px 0 0;
-  font-size: 0.85rem;
+  margin: 0;
+  font-size: 0.8rem;
   color: var(--muted);
 }
 
@@ -565,12 +581,19 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   z-index: 1000;
 }
 
+.edge-label-hit {
+  position: absolute;
+  inset: -12px -16px;
+  border-radius: 999px;
+}
+
 .react-flow__edge-labels {
   z-index: 1000;
 }
 
-
 .edge-label-text {
+  position: relative;
+  z-index: 1;
   background: rgba(255, 255, 255, 0.92);
   border: 1px solid var(--panel-border);
   border-radius: 999px;

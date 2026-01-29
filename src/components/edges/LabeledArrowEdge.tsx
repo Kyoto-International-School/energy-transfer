@@ -19,6 +19,7 @@ const MIN_LABEL_OFFSET = 16;
 const NEIGHBOR_RADIUS = 140;
 const PARALLEL_EDGE_SPACING = 24;
 const PARALLEL_EDGE_PADDING = 10;
+const EDGE_INTERACTION_WIDTH = 24;
 
 const calculateControlOffset = (distance: number, curvature: number) => {
   if (distance >= 0) {
@@ -139,7 +140,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
     targetPosition: resolvedTargetPosition,
     curvature,
   });
-  const labelText = data?.label || label || "Select transfer type";
+  const labelText = data?.label || label || "Select transfer";
 
   useLayoutEffect(() => {
     const element = labelRef.current;
@@ -331,7 +332,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
         id={id}
         path={edgePath}
         style={style}
-        interactionWidth={interactionWidth}
+        interactionWidth={interactionWidth ?? EDGE_INTERACTION_WIDTH}
       />
       {markerEnd && (
         <path
@@ -347,6 +348,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
             transform: `translate(-50%, -50%) translate(${labelPosX}px, ${labelPosY}px)`,
           }}
         >
+          <span className="edge-label-hit" aria-hidden="true" />
           <div ref={labelRef} className="edge-label-text">
             {labelText}
           </div>

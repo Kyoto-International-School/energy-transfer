@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import type { MouseEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -58,6 +59,9 @@ const DRAG_HANDLE_SELECTOR = ".node-drag-handle";
 const DRAG_HOLD_DELAY = 220;
 const DRAG_HOLD_CANCEL_DISTANCE = 6;
 const DRAG_HOLD_THRESHOLD = Number.POSITIVE_INFINITY;
+const SNAP_GRID: [number, number] = [8, 8];
+const MINIMAP_SIZE_SMALL = { width: 80, height: 60 };
+const MINIMAP_SIZE_LARGE = { width: 200, height: 150 };
 
 function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
   const {
@@ -192,7 +196,7 @@ const initialEdges: EnergyEdge[] = [
     target: "node-2",
     type: "labeledArrow",
     data: { label: "" },
-    label: "Select transfer type",
+    label: "Select transfer",
     markerEnd: EDGE_MARKER,
   },
 ];
@@ -201,7 +205,7 @@ const normalizeEdges = (edges: EnergyEdge[]): EnergyEdge[] =>
   edges.map((edge) => ({
     ...edge,
     data: { label: edge.data?.label ?? "" },
-    label: edge.label ?? "Select transfer type",
+    label: edge.label ?? "Select transfer",
     type: edge.type ?? "labeledArrow",
     markerEnd: edge.markerEnd ?? EDGE_MARKER,
     markerStart: undefined,
@@ -236,6 +240,7 @@ function Editor() {
   const [viewport, setViewportState] = useState<Viewport | null>(null);
   const [dragHoldNodeId, setDragHoldNodeId] = useState<string | null>(null);
   const [dragHoldActive, setDragHoldActive] = useState(false);
+  const [isMiniMapLarge, setIsMiniMapLarge] = useState(true);
   const selectionTimestampRef = useRef(0);
   const pointerDownOnElementRef = useRef<"node" | "edge" | "handle" | null>(
     null,
@@ -518,7 +523,7 @@ function Editor() {
             ...connection,
             type: "labeledArrow",
             data: { label: "" },
-            label: "Select transfer type",
+            label: "Select transfer",
             markerEnd: EDGE_MARKER,
           },
           eds,
@@ -810,7 +815,7 @@ function Editor() {
             ? {
                 ...edge,
                 data: { ...edge.data, label },
-                label: label || "Select transfer type",
+                label: label || "Select transfer",
               }
             : edge,
         ),
@@ -822,6 +827,19 @@ function Editor() {
   const onMoveEnd = useCallback((_: unknown, nextViewport: Viewport) => {
     setViewportState(nextViewport);
   }, []);
+
+  const handleMiniMapClick = useCallback(
+    (event: MouseEvent, _position: XYPosition) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsMiniMapLarge((current) => !current);
+    },
+    [],
+  );
+
+  const miniMapStyle = isMiniMapLarge
+    ? MINIMAP_SIZE_LARGE
+    : MINIMAP_SIZE_SMALL;
 
   return (
     <div className="app-shell">
@@ -855,6 +873,8 @@ function Editor() {
             nodeClickDistance={12}
             nodeDragThreshold={dragHoldActive ? 0 : DRAG_HOLD_THRESHOLD}
             selectNodesOnDrag={false}
+            snapToGrid={true}
+            snapGrid={SNAP_GRID}
             panOnDrag={selectedNode?.data.kind === "store" ? [1, 2] : true}
             connectionRadius={28}
             connectionLineComponent={EasyConnectionLine}
@@ -863,7 +883,16 @@ function Editor() {
             proOptions={{ hideAttribution: true }}
           >
             <Controls />
-            <MiniMap />
+            <MiniMap
+              className={`minimap-toggle${isMiniMapLarge ? " minimap-toggle--large" : ""}`}
+              onClick={handleMiniMapClick}
+              style={miniMapStyle}
+              ariaLabel={
+                isMiniMapLarge
+                  ? "Mini map, tap to shrink"
+                  : "Mini map, tap to enlarge"
+              }
+            />
             <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           </ReactFlow>
         </div>

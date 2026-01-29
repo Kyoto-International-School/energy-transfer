@@ -36,12 +36,12 @@ const items: SidebarItem[] = [
   {
     kind: "store",
     label: "Store",
-    description: "Represents stored energy.",
+    description: "An energy reserve.",
   },
   {
     kind: "external",
     label: "External",
-    description: "Represents an input or output.",
+    description: "Outside input/output.",
   },
 ];
 
@@ -115,18 +115,18 @@ export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
                 }}
               >
                 <div className="library-item__content">
-                  <span className="library-item__icon" aria-hidden="true">
-                    <ComponentTypeIcon
-                      kind={item.kind}
-                      className="library-item__icon-svg"
-                    />
-                  </span>
-                  <div>
+                  <div className="library-item__header">
+                    <span className="library-item__icon" aria-hidden="true">
+                      <ComponentTypeIcon
+                        kind={item.kind}
+                        className="library-item__icon-svg"
+                      />
+                    </span>
                     <p className="library-item__label">{item.label}</p>
-                    <p className="library-item__description">
-                      {item.description}
-                    </p>
                   </div>
+                  <p className="library-item__description">
+                    {item.description}
+                  </p>
                 </div>
               </button>
             ))}

@@ -140,7 +140,7 @@ export function Inspector({
               onEdgeLabelChange(event.target.value as EdgeLabel | "")
             }
           >
-            <option value="">Select transfer type</option>
+            <option value="">Select transfer</option>
             {EDGE_LABEL_OPTIONS.map((option) => (
               <option key={option} value={option}>
                 {option}
