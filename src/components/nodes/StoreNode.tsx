@@ -13,7 +13,7 @@ export const StoreNode = memo(function StoreNode({
 
   return (
     <BaseNode className="w-36 min-h-[56px] flex items-center justify-center px-2 text-center">
-      <p className="text-sm font-semibold text-slate-900">{storeLabel}</p>
+      <p className="store-node__label">{storeLabel}</p>
       <EasyConnectHandles nodeId={id} />
     </BaseNode>
   );

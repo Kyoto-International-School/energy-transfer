@@ -65,6 +65,11 @@ body.sidebar-collapsed .app-shell {
   touch-action: none;
 }
 
+.flow-wrapper .react-flow {
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .react-flow__minimap.minimap-toggle {
   cursor: zoom-in;
 }
@@ -128,6 +133,12 @@ body.sidebar-collapsed .app-shell {
   pointer-events: auto;
 }
 
+[data-slot="base-node-title"] {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+}
+
 .container-node__header {
   height: var(--container-header-height, 36px);
   padding: 0 12px;
@@ -153,8 +164,8 @@ body.sidebar-collapsed .app-shell {
   border: none;
   background: none;
   padding: 0;
-  font-size: 0.75rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--muted);
   cursor: pointer;
   pointer-events: auto;
@@ -267,8 +278,8 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   border: none;
   background: #d7e4e6;
   padding: 2px 6px 2px 10px;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   color: #0f172a;
   box-shadow: 0 4px 12px rgba(15, 23, 42, 0.12);
 }
@@ -620,8 +631,8 @@ body.dragging-store .react-flow__node-container .container-node__body * {
 
 .ghostnode__hint {
   margin: 0;
-  font-size: 0.7rem;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
   color: #b91c1c;
 }
 
@@ -689,6 +700,13 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   z-index: 1000;
 }
 
+.store-node__label {
+  margin: 0;
+  font-size: 12px;
+  font-weight: 400;
+  color: #0f1a1c;
+}
+
 .edge-label-text {
   position: relative;
   z-index: 1;
@@ -696,7 +714,8 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   border: 1px solid var(--panel-border);
   border-radius: 999px;
   padding: 4px 10px;
-  font-size: 0.75rem;
+  font-size: 12px;
+  font-weight: 400;
   color: #0f1a1c;
   box-shadow: 0 6px 12px rgba(16, 20, 24, 0.12);
   white-space: nowrap;
