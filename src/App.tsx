@@ -23,6 +23,7 @@ import {
   type XYPosition,
 } from "@xyflow/react";
 import type { IsValidConnection } from "@xyflow/system";
+import { toPng } from "html-to-image";
 import "./App.css";
 
 import { Sidebar } from "./components/Sidebar";
@@ -32,7 +33,9 @@ import { ExternalNode } from "./components/nodes/ExternalNode";
 import { LabeledArrowEdge } from "./components/edges/LabeledArrowEdge";
 import { EasyConnectionLine } from "./components/edges/EasyConnectionLine";
 import { DnDProvider, type DropTarget } from "./dnd/useDnD";
+import { loadSettings, saveSettings } from "./settings";
 import { loadDiagram, saveDiagram } from "./storage";
+import { getExportFilename } from "./utils/filename";
 import type {
   EnergyNode,
   EnergyEdgeData,
@@ -43,7 +46,7 @@ import type {
 
 const CONTAINER_LAYOUT = {
   headerHeight: 36,
-  contentPaddingTop: 2,
+  contentPaddingTop: 6,
   contentPaddingBottom: 4,
   storeHeight: 56,
   storeGap: 64,
@@ -56,10 +59,11 @@ const EDGE_MARKER = {
   height: 20,
 };
 const DRAG_HANDLE_SELECTOR = ".node-drag-handle";
-const DRAG_HOLD_DELAY = 220;
+const CONTAINER_DRAG_HANDLE_SELECTOR = ".container-node__header";
+const EXTERNAL_DRAG_HANDLE_SELECTOR = ".external-node__label-text";
+const DRAG_HOLD_DELAY = 0;
 const DRAG_HOLD_CANCEL_DISTANCE = 6;
 const DRAG_HOLD_THRESHOLD = Number.POSITIVE_INFINITY;
-const SNAP_GRID: [number, number] = [8, 8];
 const MINIMAP_SIZE_SMALL = { width: 80, height: 60 };
 const MINIMAP_SIZE_LARGE = { width: 200, height: 150 };
 
@@ -115,8 +119,15 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
       dragHandle:
         node.data.kind === "store"
           ? undefined
-          : (node.dragHandle ?? DRAG_HANDLE_SELECTOR),
+          : node.data.kind === "container"
+            ? CONTAINER_DRAG_HANDLE_SELECTOR
+            : node.data.kind === "external"
+              ? EXTERNAL_DRAG_HANDLE_SELECTOR
+              : (node.dragHandle ?? DRAG_HANDLE_SELECTOR),
     };
+    if (node.data.kind === "container") {
+      baseNode.selectable = false;
+    }
     if (node.data.kind === "store" && node.parentId) {
       const metrics = containerMetrics.get(node.parentId);
       const siblings = storesByParent.get(node.parentId) ?? [];
@@ -240,7 +251,15 @@ function Editor() {
   const [viewport, setViewportState] = useState<Viewport | null>(null);
   const [dragHoldNodeId, setDragHoldNodeId] = useState<string | null>(null);
   const [dragHoldActive, setDragHoldActive] = useState(false);
-  const [isMiniMapLarge, setIsMiniMapLarge] = useState(true);
+  const initialSettings = useMemo(() => loadSettings(), []);
+  const [isMiniMapLarge, setIsMiniMapLarge] = useState(
+    initialSettings.minimapSize === "large",
+  );
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(
+    initialSettings.sidebarCollapsed,
+  );
+  const [userName, setUserName] = useState(initialSettings.userName);
+  const [isExporting, setIsExporting] = useState(false);
   const selectionTimestampRef = useRef(0);
   const pointerDownOnElementRef = useRef<"node" | "edge" | "handle" | null>(
     null,
@@ -370,20 +389,6 @@ function Editor() {
     () => edges.find((edge) => edge.id === selectedEdgeId) ?? null,
     [edges, selectedEdgeId],
   );
-  const renderedNodes = useMemo(() => {
-    if (!dragHoldNodeId) return nodes;
-    return nodes.map((node) => {
-      if (node.id !== dragHoldNodeId) return node;
-      const existing = node.className ?? "";
-      if (existing.split(" ").includes("node-drag-hold")) {
-        return node;
-      }
-      const className = existing
-        ? `${existing} node-drag-hold`
-        : "node-drag-hold";
-      return { ...node, className };
-    });
-  }, [dragHoldNodeId, nodes]);
 
   useEffect(() => {
     const saved = loadDiagram();
@@ -405,6 +410,14 @@ function Editor() {
   }, [nodes, edges, viewport]);
 
   useEffect(() => {
+    saveSettings({
+      minimapSize: isMiniMapLarge ? "large" : "small",
+      sidebarCollapsed: isSidebarCollapsed,
+      userName,
+    });
+  }, [isMiniMapLarge, isSidebarCollapsed, userName]);
+
+  useEffect(() => {
     nodeIdRef.current = getNextNodeId(nodes);
   }, [nodes]);
 
@@ -421,7 +434,9 @@ function Editor() {
       const targetNode = target?.closest(".react-flow__node");
       const targetEdge = target?.closest(".react-flow__edge");
       const targetHandle = target?.closest(".react-flow__handle");
-      const dragHandle = target?.closest(".node-drag-handle");
+      const dragHandle = target?.closest(
+        ".node-drag-handle, .container-node__header, .external-node__label-text",
+      );
       if (!target) {
         pointerDownOnElementRef.current = null;
         logTouch("pointer-down (no target)", {
@@ -438,14 +453,21 @@ function Editor() {
           clearDragHold("restart");
           dragHoldPointerIdRef.current = event.pointerId;
           dragHoldStartRef.current = { x: event.clientX, y: event.clientY };
-          dragHoldTimerRef.current = window.setTimeout(() => {
-            if (dragHoldPointerIdRef.current !== event.pointerId) return;
-            dragHoldTimerRef.current = null;
+          if (DRAG_HOLD_DELAY <= 0) {
             setDragHoldActive(true);
             setDragHoldNodeId(nodeId);
             dragHoldStateRef.current = { active: true, nodeId };
             logTouch("drag-hold active", { nodeId });
-          }, DRAG_HOLD_DELAY);
+          } else {
+            dragHoldTimerRef.current = window.setTimeout(() => {
+              if (dragHoldPointerIdRef.current !== event.pointerId) return;
+              dragHoldTimerRef.current = null;
+              setDragHoldActive(true);
+              setDragHoldNodeId(nodeId);
+              dragHoldStateRef.current = { active: true, nodeId };
+              logTouch("drag-hold active", { nodeId });
+            }, DRAG_HOLD_DELAY);
+          }
         }
       }
 
@@ -644,13 +666,20 @@ function Editor() {
 
   const handleNodeClick = useCallback(
     (event: React.MouseEvent, node: EnergyNode) => {
+      if (node.data.kind === "container") {
+        const target = event.target as HTMLElement | null;
+        if (!target?.closest(".container-node__header")) {
+          logTouch("container click ignored (not header)", { nodeId: node.id });
+          return;
+        }
+      }
       event.stopPropagation();
       selectNodeById(node.id, {
         source: "click",
         pointerType: (event.nativeEvent as PointerEvent).pointerType,
       });
     },
-    [selectNodeById],
+    [logTouch, selectNodeById],
   );
 
   const handleEdgeClick = useCallback(
@@ -773,6 +802,103 @@ function Editor() {
     [logTouch, nodes, setEdges, setNodes],
   );
 
+  const addStoreToContainer = useCallback(
+    (containerId: string) => {
+      const container = nodes.find((node) => node.id === containerId);
+      if (!container) return;
+
+      const fallbackHeight =
+        CONTAINER_LAYOUT.headerHeight +
+        CONTAINER_LAYOUT.contentPaddingTop +
+        CONTAINER_LAYOUT.contentPaddingBottom +
+        CONTAINER_LAYOUT.storeHeight;
+      const width =
+        container.measured?.width ??
+        container.width ??
+        CONTAINER_LAYOUT.widthFallback;
+      const height =
+        container.measured?.height ?? container.height ?? fallbackHeight;
+      const position = {
+        x: container.position.x + width / 2,
+        y: container.position.y + height / 2,
+      };
+
+      onCreateNode("store", position, {
+        type: "container-body",
+        nodeId: containerId,
+      });
+    },
+    [nodes, onCreateNode],
+  );
+
+  const dragHoldContainerId = useMemo(() => {
+    if (!dragHoldNodeId) return null;
+    const dragNode = nodes.find((node) => node.id === dragHoldNodeId);
+    return dragNode?.data.kind === "container" ? dragHoldNodeId : null;
+  }, [dragHoldNodeId, nodes]);
+
+  const renderedNodes = useMemo(() => {
+    const baseNodes = !dragHoldNodeId
+      ? nodes
+      : nodes.map((node) => {
+          const shouldHold =
+            node.id === dragHoldNodeId ||
+            (dragHoldContainerId && node.parentId === dragHoldContainerId);
+          if (!shouldHold) return node;
+          const existing = node.className ?? "";
+          if (existing.split(" ").includes("node-drag-hold")) {
+            return node;
+          }
+          const className = existing
+            ? `${existing} node-drag-hold`
+            : "node-drag-hold";
+          return { ...node, className };
+        });
+
+    return baseNodes.map((node) => {
+      if (node.data.kind !== "container") return node;
+      return {
+        ...node,
+        data: {
+          ...node.data,
+          onAddStore: addStoreToContainer,
+        },
+      };
+    });
+  }, [addStoreToContainer, dragHoldContainerId, dragHoldNodeId, nodes]);
+
+  const renderedEdges = useMemo(() => {
+    if (!dragHoldContainerId) return edges;
+    const parentById = new Map(
+      nodes.map((node) => [node.id, node.parentId ?? null]),
+    );
+
+    return edges.map((edge) => {
+      if (!edge.source || !edge.target) return edge;
+      const sourceParent = parentById.get(edge.source);
+      const targetParent = parentById.get(edge.target);
+      const isInContainer =
+        sourceParent === dragHoldContainerId &&
+        targetParent === dragHoldContainerId;
+      if (!isInContainer) {
+        if (edge.data?.lift) {
+          return { ...edge, data: { ...edge.data, lift: false } };
+        }
+        return edge;
+      }
+      const existing = edge.className ?? "";
+      if (existing.split(" ").includes("edge-drag-hold")) {
+        return edge;
+      }
+      const className = existing ? `${existing} edge-drag-hold` : "edge-drag-hold";
+      return {
+        ...edge,
+        className,
+        data: { ...edge.data, lift: true },
+      };
+    });
+  }, [dragHoldContainerId, edges, nodes]);
+
   const onLabelChange = useCallback(
     (label: string) => {
       if (!selectedNodeId) return;
@@ -837,6 +963,93 @@ function Editor() {
     [],
   );
 
+  const handleExport = useCallback(
+    async (nameOverride?: string) => {
+      const filename = getExportFilename(nameOverride ?? userName);
+      if (!filename) return;
+
+    const target = document.querySelector<HTMLElement>(
+      ".flow-wrapper .react-flow",
+    );
+    if (!target || isExporting) return;
+
+    setIsExporting(true);
+    const wrapper = target.closest<HTMLElement>(".flow-wrapper");
+    wrapper?.classList.add("flow-wrapper--export");
+
+    const edgePaths = Array.from(
+      target.querySelectorAll<SVGPathElement>(".react-flow__edge-path"),
+    );
+    const edgeOverrides = edgePaths.map((path) => {
+      const computed = window.getComputedStyle(path);
+      const prevStroke = path.getAttribute("stroke");
+      const prevStrokeWidth = path.getAttribute("stroke-width");
+      const prevStrokeOpacity = path.getAttribute("stroke-opacity");
+      const stroke = computed.stroke || "#b1b1b7";
+      const strokeWidth = computed.strokeWidth || "1";
+      const strokeOpacity = computed.strokeOpacity;
+      path.setAttribute("stroke", stroke);
+      path.setAttribute("stroke-width", strokeWidth);
+      if (strokeOpacity && strokeOpacity !== "1") {
+        path.setAttribute("stroke-opacity", strokeOpacity);
+      } else {
+        path.removeAttribute("stroke-opacity");
+      }
+      return { path, prevStroke, prevStrokeWidth, prevStrokeOpacity };
+    });
+
+    try {
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+      const dataUrl = await toPng(target, {
+        cacheBust: true,
+        pixelRatio: 2,
+        backgroundColor: "#ffffff",
+        filter: (node) => {
+          if (!(node instanceof HTMLElement)) return true;
+          return !node.closest(".react-flow__panel");
+        },
+      });
+      const link = document.createElement("a");
+      link.href = dataUrl;
+      link.download = filename;
+      link.click();
+    } catch (error) {
+      console.error("Failed to export canvas", error);
+    } finally {
+      edgeOverrides.forEach(
+        ({ path, prevStroke, prevStrokeWidth, prevStrokeOpacity }) => {
+          if (prevStroke === null) {
+            path.removeAttribute("stroke");
+          } else {
+            path.setAttribute("stroke", prevStroke);
+          }
+          if (prevStrokeWidth === null) {
+            path.removeAttribute("stroke-width");
+          } else {
+            path.setAttribute("stroke-width", prevStrokeWidth);
+          }
+          if (prevStrokeOpacity === null) {
+            path.removeAttribute("stroke-opacity");
+          } else {
+            path.setAttribute("stroke-opacity", prevStrokeOpacity);
+          }
+        },
+      );
+      wrapper?.classList.remove("flow-wrapper--export");
+      setIsExporting(false);
+    }
+    },
+    [isExporting, userName],
+  );
+
+  const handleClearCanvas = useCallback(() => {
+    clearDragHold("clear-canvas");
+    setSelectedNodeId(null);
+    setSelectedEdgeId(null);
+    setNodes([]);
+    setEdges([]);
+  }, [clearDragHold, setEdges, setNodes]);
+
   const miniMapStyle = isMiniMapLarge
     ? MINIMAP_SIZE_LARGE
     : MINIMAP_SIZE_SMALL;
@@ -845,6 +1058,15 @@ function Editor() {
     <div className="app-shell">
       <Sidebar
         onCreateNode={onCreateNode}
+        onExportImage={handleExport}
+        isExporting={isExporting}
+        onClearCanvas={handleClearCanvas}
+        userName={userName}
+        onUserNameChange={setUserName}
+        isCollapsed={isSidebarCollapsed}
+        onToggleCollapse={() =>
+          setIsSidebarCollapsed((current) => !current)
+        }
         inspectorProps={{
           selectedNode,
           selectedEdge,
@@ -857,7 +1079,7 @@ function Editor() {
         <div className="flow-wrapper">
           <ReactFlow<EnergyNode, EnergyEdge>
             nodes={renderedNodes}
-            edges={edges}
+            edges={renderedEdges}
             nodeTypes={nodeTypes}
             edgeTypes={edgeTypes}
             onNodesChange={onNodesChange}
@@ -873,8 +1095,7 @@ function Editor() {
             nodeClickDistance={12}
             nodeDragThreshold={dragHoldActive ? 0 : DRAG_HOLD_THRESHOLD}
             selectNodesOnDrag={false}
-            snapToGrid={true}
-            snapGrid={SNAP_GRID}
+            elevateNodesOnSelect={false}
             panOnDrag={selectedNode?.data.kind === "store" ? [1, 2] : true}
             connectionRadius={28}
             connectionLineComponent={EasyConnectionLine}

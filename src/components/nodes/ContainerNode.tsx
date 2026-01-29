@@ -26,7 +26,16 @@ export const ContainerNode = memo(function ContainerNode({
         data-node-id={id}
       >
         {!(data.storeCount ?? 0) && (
-          <p className="text-muted-foreground text-xs">Add a store</p>
+          <button
+            type="button"
+            className="container-node__empty-action nodrag nopan"
+            onClick={(event) => {
+              event.stopPropagation();
+              data.onAddStore?.(id);
+            }}
+          >
+            Add a store
+          </button>
         )}
       </BaseNodeContent>
     </BaseNode>

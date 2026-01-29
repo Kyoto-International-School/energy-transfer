@@ -33,12 +33,14 @@ export type EnergyNodeData = {
   kind: EnergyNodeKind;
   storeType?: StoreType | "";
   storeCount?: number;
+  onAddStore?: (containerId: string) => void;
 };
 
 export type EnergyNode = Node<EnergyNodeData, EnergyNodeType>;
 
 export type EnergyEdgeData = {
   label?: EdgeLabel | "";
+  lift?: boolean;
 };
 
 export type EnergyEdge = Edge<EnergyEdgeData>;

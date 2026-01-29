@@ -343,7 +343,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
       )}
       <EdgeLabelRenderer>
         <div
-          className="edge-label-wrapper nodrag nopan"
+          className={`edge-label-wrapper nodrag nopan${data?.lift ? " edge-drag-hold" : ""}`}
           style={{
             transform: `translate(-50%, -50%) translate(${labelPosX}px, ${labelPosY}px)`,
           }}

@@ -8,9 +8,31 @@ import {
   type OnDropAction,
 } from "../dnd/useDnD";
 import type { EnergyNodeKind } from "../types";
-import { FaCubes } from "react-icons/fa";
+import { FaCamera, FaCog, FaCubes, FaTools, FaTrash } from "react-icons/fa";
 import { ComponentTypeIcon } from "./component-icons";
 import { Inspector, type InspectorProps } from "./Inspector";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { getExportFilename } from "@/utils/filename";
 
 type SidebarItem = {
   kind: EnergyNodeKind;
@@ -24,7 +46,14 @@ type SidebarProps = {
     position: XYPosition,
     dropTarget: DropTarget,
   ) => void;
+  onExportImage: (nameOverride?: string) => void;
+  isExporting: boolean;
+  onClearCanvas: () => void;
+  userName: string;
+  onUserNameChange: (name: string) => void;
   inspectorProps: InspectorProps;
+  isCollapsed: boolean;
+  onToggleCollapse: () => void;
 };
 
 const items: SidebarItem[] = [
@@ -45,10 +74,22 @@ const items: SidebarItem[] = [
   },
 ];
 
-export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
+export function Sidebar({
+  onCreateNode,
+  onExportImage,
+  isExporting,
+  onClearCanvas,
+  userName,
+  onUserNameChange,
+  inspectorProps,
+  isCollapsed,
+  onToggleCollapse,
+}: SidebarProps) {
   const { isDragging, onDragStart } = useDnD();
   const [activeKind, setActiveKind] = useState<EnergyNodeKind | null>(null);
-  const [isCollapsed, setIsCollapsed] = useState(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [draftName, setDraftName] = useState(userName);
+  const [pendingExport, setPendingExport] = useState(false);
 
   useEffect(() => {
     if (!isDragging) {
@@ -68,6 +109,18 @@ export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
     body.classList.toggle("sidebar-collapsed", isCollapsed);
     return () => body.classList.remove("sidebar-collapsed");
   }, [isCollapsed]);
+
+  useEffect(() => {
+    if (isSettingsOpen) {
+      setDraftName(userName);
+    }
+  }, [isSettingsOpen, userName]);
+
+  useEffect(() => {
+    if (!isSettingsOpen) {
+      setPendingExport(false);
+    }
+  }, [isSettingsOpen]);
 
   const createDropAction = useCallback(
     (kind: EnergyNodeKind): OnDropAction => {
@@ -92,7 +145,7 @@ export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
               className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
               aria-expanded={!isCollapsed}
               aria-controls="components-panel-list"
-              onClick={() => setIsCollapsed((current) => !current)}
+              onClick={onToggleCollapse}
             >
               <FaCubes aria-hidden="true" />
               <span className="panel__eyebrow-text">Components</span>
@@ -137,8 +190,125 @@ export function Sidebar({ onCreateNode, inspectorProps }: SidebarProps) {
           variant="panel"
           className="panel--inspector"
           isCollapsed={isCollapsed}
-          onToggleCollapse={() => setIsCollapsed((current) => !current)}
+          onToggleCollapse={onToggleCollapse}
         />
+        <section
+          className={`panel panel--tools${isCollapsed ? " panel--collapsed" : ""}`}
+        >
+          <div className="panel__header">
+            <p className="panel__eyebrow panel__eyebrow--icon">
+              <FaTools aria-hidden="true" />
+              <span className="panel__eyebrow-text">Tools</span>
+            </p>
+          </div>
+          <div className="tools-panel__content">
+            <button
+              type="button"
+              className="tools-panel__button"
+              onClick={() => {
+                if (!getExportFilename(userName)) {
+                  setPendingExport(true);
+                  setIsSettingsOpen(true);
+                  return;
+                }
+                onExportImage();
+              }}
+              disabled={isExporting}
+              aria-label="Download image"
+              title="Download image"
+            >
+              <FaCamera aria-hidden="true" />
+            </button>
+            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="tools-panel__button"
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  <FaCog aria-hidden="true" />
+                </button>
+              </DialogTrigger>
+              <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
+                <DialogHeader>
+                  <DialogTitle>Settings</DialogTitle>
+                  <DialogDescription>
+                    Customize your workspace details.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                  <label className="inspector__label" htmlFor="settings-name">
+                    Your name
+                  </label>
+                  <input
+                    id="settings-name"
+                    className="inspector__input"
+                    type="text"
+                    value={draftName}
+                    onChange={(event) => setDraftName(event.target.value)}
+                    placeholder="Add your name"
+                  />
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => setIsSettingsOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!draftName.trim()}
+                    onClick={() => {
+                      const trimmedName = draftName.trim();
+                      if (!trimmedName) return;
+                      onUserNameChange(trimmedName);
+                      if (pendingExport) {
+                        onExportImage(trimmedName);
+                        setPendingExport(false);
+                      }
+                      setIsSettingsOpen(false);
+                    }}
+                  >
+                    Save
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <button
+                  type="button"
+                  className="tools-panel__button"
+                  aria-label="Clear canvas"
+                  title="Clear canvas"
+                >
+                  <FaTrash aria-hidden="true" />
+                </button>
+              </AlertDialogTrigger>
+              <AlertDialogContent size="sm">
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Clear canvas?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    This removes all components and transfers. This can't be
+                    undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    variant="destructive"
+                    onClick={onClearCanvas}
+                  >
+                    Clear
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          </div>
+        </section>
       </aside>
     </>
   );
@@ -160,6 +330,9 @@ function DragGhost({ kind }: DragGhostProps) {
       ? "ghostnode--valid"
       : "ghostnode--invalid"
     : "";
+  const item = items.find((entry) => entry.kind === kind);
+  const label = item?.label ?? kind.charAt(0).toUpperCase() + kind.slice(1);
+  const description = item?.description ?? "";
 
   return (
     <div
@@ -168,9 +341,22 @@ function DragGhost({ kind }: DragGhostProps) {
         transform: `translate(${position.x}px, ${position.y}px) translate(-50%, -50%)`,
       }}
     >
-      <p className="ghostnode__label">
-        {kind.charAt(0).toUpperCase() + kind.slice(1)}
-      </p>
+      <div className="library-item ghostnode__card">
+        <div className="library-item__content">
+          <div className="library-item__header">
+            <span className="library-item__icon" aria-hidden="true">
+              <ComponentTypeIcon
+                kind={kind}
+                className="library-item__icon-svg"
+              />
+            </span>
+            <p className="library-item__label">{label}</p>
+          </div>
+          {description && (
+            <p className="library-item__description">{description}</p>
+          )}
+        </div>
+      </div>
       {isStore && !isValidDrop && (
         <p className="ghostnode__hint">Drop into a container</p>
       )}
