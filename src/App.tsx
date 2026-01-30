@@ -251,6 +251,10 @@ function Editor() {
   const [viewport, setViewportState] = useState<Viewport | null>(null);
   const [dragHoldNodeId, setDragHoldNodeId] = useState<string | null>(null);
   const [dragHoldActive, setDragHoldActive] = useState(false);
+  const [activeStoreMenuId, setActiveStoreMenuId] = useState<string | null>(
+    null,
+  );
+  const [activeEdgeMenuId, setActiveEdgeMenuId] = useState<string | null>(null);
   const initialSettings = useMemo(() => loadSettings(), []);
   const [isMiniMapLarge, setIsMiniMapLarge] = useState(
     initialSettings.minimapSize === "large",
@@ -366,6 +370,8 @@ function Editor() {
   const clearSelection = useCallback(() => {
     setSelectedNodeId(null);
     setSelectedEdgeId(null);
+    setActiveStoreMenuId(null);
+    setActiveEdgeMenuId(null);
     setNodes((current) =>
       current.map((node) => {
         if (!node.selected) return node;
@@ -678,6 +684,14 @@ function Editor() {
         source: "click",
         pointerType: (event.nativeEvent as PointerEvent).pointerType,
       });
+      setActiveEdgeMenuId(null);
+      if (node.data.kind === "store") {
+        setActiveStoreMenuId((current) =>
+          current === node.id ? null : node.id,
+        );
+      } else {
+        setActiveStoreMenuId(null);
+      }
     },
     [logTouch, selectNodeById],
   );
@@ -685,6 +699,10 @@ function Editor() {
   const handleEdgeClick = useCallback(
     (event: React.MouseEvent, edge: EnergyEdge) => {
       event.stopPropagation();
+      setActiveStoreMenuId(null);
+      setActiveEdgeMenuId((current) =>
+        current === edge.id ? null : edge.id,
+      );
       selectEdgeById(edge.id, {
         source: "click",
         pointerType: (event.nativeEvent as PointerEvent).pointerType,
@@ -692,6 +710,16 @@ function Editor() {
     },
     [selectEdgeById],
   );
+
+  const handleNodeDragStart = useCallback(() => {
+    setActiveStoreMenuId(null);
+    setActiveEdgeMenuId(null);
+  }, []);
+
+  const handleConnectStart = useCallback(() => {
+    setActiveStoreMenuId(null);
+    setActiveEdgeMenuId(null);
+  }, []);
 
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
@@ -837,6 +865,73 @@ function Editor() {
     return dragNode?.data.kind === "container" ? dragHoldNodeId : null;
   }, [dragHoldNodeId, nodes]);
 
+  const updateStoreTypeForNode = useCallback(
+    (nodeId: string, storeType: StoreType | "") => {
+      const label = storeType || "Select store";
+
+      setNodes((current) =>
+        updateContainerSizing(
+          current.map((node) =>
+            node.id === nodeId
+              ? { ...node, data: { ...node.data, storeType, label } }
+              : node,
+          ),
+        ),
+      );
+    },
+    [setNodes],
+  );
+
+  const handleStoreTypeSelect = useCallback(
+    (nodeId: string, storeType: StoreType | "") => {
+      updateStoreTypeForNode(nodeId, storeType);
+      setActiveStoreMenuId(null);
+    },
+    [updateStoreTypeForNode],
+  );
+
+  const onStoreTypeChange = useCallback(
+    (storeType: StoreType | "") => {
+      if (!selectedNodeId) return;
+      updateStoreTypeForNode(selectedNodeId, storeType);
+    },
+    [selectedNodeId, updateStoreTypeForNode],
+  );
+
+  const updateEdgeLabelForEdge = useCallback(
+    (edgeId: string, label: EdgeLabel | "") => {
+      setEdges((current) =>
+        current.map((edge) =>
+          edge.id === edgeId
+            ? {
+                ...edge,
+                data: { ...edge.data, label },
+                label: label || "Select transfer",
+              }
+            : edge,
+        ),
+      );
+    },
+    [setEdges],
+  );
+
+  const handleEdgeMenuSelect = useCallback(
+    (edgeId: string, label: EdgeLabel | "") => {
+      updateEdgeLabelForEdge(edgeId, label);
+      setActiveEdgeMenuId(null);
+    },
+    [updateEdgeLabelForEdge],
+  );
+
+  const handleEdgeMenuToggle = useCallback(
+    (edgeId: string) => {
+      setActiveStoreMenuId(null);
+      setActiveEdgeMenuId((current) => (current === edgeId ? null : edgeId));
+      selectEdgeById(edgeId, { source: "label" });
+    },
+    [selectEdgeById],
+  );
+
   const renderedNodes = useMemo(() => {
     const baseNodes = !dragHoldNodeId
       ? nodes
@@ -856,48 +951,90 @@ function Editor() {
         });
 
     return baseNodes.map((node) => {
-      if (node.data.kind !== "container") return node;
-      return {
-        ...node,
-        data: {
-          ...node.data,
-          onAddStore: addStoreToContainer,
-        },
-      };
+      if (node.data.kind === "container") {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onAddStore: addStoreToContainer,
+          },
+        };
+      }
+      if (node.data.kind === "store") {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onStoreTypeSelect: handleStoreTypeSelect,
+            isStoreMenuOpen: node.id === activeStoreMenuId,
+          },
+        };
+      }
+      return node;
     });
-  }, [addStoreToContainer, dragHoldContainerId, dragHoldNodeId, nodes]);
+  }, [
+    activeStoreMenuId,
+    addStoreToContainer,
+    dragHoldContainerId,
+    dragHoldNodeId,
+    handleStoreTypeSelect,
+    nodes,
+  ]);
 
   const renderedEdges = useMemo(() => {
-    if (!dragHoldContainerId) return edges;
-    const parentById = new Map(
-      nodes.map((node) => [node.id, node.parentId ?? null]),
-    );
+    const baseEdges =
+      !dragHoldContainerId
+        ? edges
+        : (() => {
+            const parentById = new Map(
+              nodes.map((node) => [node.id, node.parentId ?? null]),
+            );
 
-    return edges.map((edge) => {
-      if (!edge.source || !edge.target) return edge;
-      const sourceParent = parentById.get(edge.source);
-      const targetParent = parentById.get(edge.target);
-      const isInContainer =
-        sourceParent === dragHoldContainerId &&
-        targetParent === dragHoldContainerId;
-      if (!isInContainer) {
-        if (edge.data?.lift) {
-          return { ...edge, data: { ...edge.data, lift: false } };
-        }
-        return edge;
-      }
-      const existing = edge.className ?? "";
-      if (existing.split(" ").includes("edge-drag-hold")) {
-        return edge;
-      }
-      const className = existing ? `${existing} edge-drag-hold` : "edge-drag-hold";
-      return {
-        ...edge,
-        className,
-        data: { ...edge.data, lift: true },
-      };
-    });
-  }, [dragHoldContainerId, edges, nodes]);
+            return edges.map((edge) => {
+              if (!edge.source || !edge.target) return edge;
+              const sourceParent = parentById.get(edge.source);
+              const targetParent = parentById.get(edge.target);
+              const isInContainer =
+                sourceParent === dragHoldContainerId &&
+                targetParent === dragHoldContainerId;
+              if (!isInContainer) {
+                if (edge.data?.lift) {
+                  return { ...edge, data: { ...edge.data, lift: false } };
+                }
+                return edge;
+              }
+              const existing = edge.className ?? "";
+              if (existing.split(" ").includes("edge-drag-hold")) {
+                return edge;
+              }
+              const className = existing
+                ? `${existing} edge-drag-hold`
+                : "edge-drag-hold";
+              return {
+                ...edge,
+                className,
+                data: { ...edge.data, lift: true },
+              };
+            });
+          })();
+
+    return baseEdges.map((edge) => ({
+      ...edge,
+      data: {
+        ...edge.data,
+        onEdgeLabelSelect: handleEdgeMenuSelect,
+        onEdgeMenuToggle: handleEdgeMenuToggle,
+        isEdgeMenuOpen: edge.id === activeEdgeMenuId,
+      },
+    }));
+  }, [
+    activeEdgeMenuId,
+    dragHoldContainerId,
+    edges,
+    handleEdgeMenuSelect,
+    handleEdgeMenuToggle,
+    nodes,
+  ]);
 
   const onLabelChange = useCallback(
     (label: string) => {
@@ -914,40 +1051,12 @@ function Editor() {
     [selectedNodeId, setNodes],
   );
 
-  const onStoreTypeChange = useCallback(
-    (storeType: StoreType | "") => {
-      if (!selectedNodeId) return;
-
-      const label = storeType || "Select store";
-
-      setNodes((current) =>
-        current.map((node) =>
-          node.id === selectedNodeId
-            ? { ...node, data: { ...node.data, storeType, label } }
-            : node,
-        ),
-      );
-    },
-    [selectedNodeId, setNodes],
-  );
-
   const onEdgeLabelChange = useCallback(
     (label: EdgeLabel | "") => {
       if (!selectedEdgeId) return;
-
-      setEdges((current) =>
-        current.map((edge) =>
-          edge.id === selectedEdgeId
-            ? {
-                ...edge,
-                data: { ...edge.data, label },
-                label: label || "Select transfer",
-              }
-            : edge,
-        ),
-      );
+      updateEdgeLabelForEdge(selectedEdgeId, label);
     },
-    [selectedEdgeId, setEdges],
+    [selectedEdgeId, updateEdgeLabelForEdge],
   );
 
   const onMoveEnd = useCallback((_: unknown, nextViewport: Viewport) => {
@@ -1085,8 +1194,10 @@ function Editor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            onConnectStart={handleConnectStart}
             isValidConnection={isValidConnection}
             onNodeClick={handleNodeClick}
+            onNodeDragStart={handleNodeDragStart}
             onEdgeClick={handleEdgeClick}
             onSelectionChange={onSelectionChange}
             onPaneClick={handlePaneClick}

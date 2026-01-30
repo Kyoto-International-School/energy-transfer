@@ -13,6 +13,7 @@ export const STORE_TYPE_OPTIONS = [
   "Gravitational potential",
   "Electrostatic potential",
   "Magnetic potential",
+  "(Passthrough)",
 ] as const;
 
 export type StoreType = (typeof STORE_TYPE_OPTIONS)[number];
@@ -34,6 +35,8 @@ export type EnergyNodeData = {
   storeType?: StoreType | "";
   storeCount?: number;
   onAddStore?: (containerId: string) => void;
+  onStoreTypeSelect?: (nodeId: string, storeType: StoreType | "") => void;
+  isStoreMenuOpen?: boolean;
 };
 
 export type EnergyNode = Node<EnergyNodeData, EnergyNodeType>;
@@ -41,6 +44,9 @@ export type EnergyNode = Node<EnergyNodeData, EnergyNodeType>;
 export type EnergyEdgeData = {
   label?: EdgeLabel | "";
   lift?: boolean;
+  onEdgeLabelSelect?: (edgeId: string, label: EdgeLabel | "") => void;
+  onEdgeMenuToggle?: (edgeId: string) => void;
+  isEdgeMenuOpen?: boolean;
 };
 
 export type EnergyEdge = Edge<EnergyEdgeData>;

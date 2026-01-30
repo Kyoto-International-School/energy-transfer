@@ -10,7 +10,7 @@ import {
 
 import { getEdgeParams, getNodeRect } from "@/lib/edge-utils";
 
-import type { EnergyEdge } from "../../types";
+import { EDGE_LABEL_OPTIONS, type EdgeLabel, type EnergyEdge } from "../../types";
 
 const DEFAULT_CURVATURE = 0.25;
 const LABEL_MARGIN = 6;
@@ -141,6 +141,11 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
     curvature,
   });
   const labelText = data?.label || label || "Select transfer";
+  const activeLabel = data?.label ?? "";
+  const menuOptions: Array<{ label: string; value: EdgeLabel | "" }> = [
+    { label: "Select transfer", value: "" },
+    ...EDGE_LABEL_OPTIONS.map((option) => ({ label: option, value: option })),
+  ];
 
   useLayoutEffect(() => {
     const element = labelRef.current;
@@ -347,11 +352,40 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
           style={{
             transform: `translate(-50%, -50%) translate(${labelPosX}px, ${labelPosY}px)`,
           }}
+          onClick={(event) => {
+            event.stopPropagation();
+            data?.onEdgeMenuToggle?.(id);
+          }}
+          onPointerDown={(event) => event.stopPropagation()}
         >
           <span className="edge-label-hit" aria-hidden="true" />
           <div ref={labelRef} className="edge-label-text">
             {labelText}
           </div>
+          {data?.isEdgeMenuOpen && (
+            <div
+              className="edge-label-menu nodrag nopan"
+              role="listbox"
+              aria-label="Select transfer type"
+              onPointerDown={(event) => event.stopPropagation()}
+            >
+              {menuOptions.map((option) => (
+                <button
+                  key={option.value || "select"}
+                  type="button"
+                  className="edge-label-menu__option"
+                  aria-pressed={activeLabel === option.value}
+                  data-active={activeLabel === option.value}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    data?.onEdgeLabelSelect?.(id, option.value);
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </EdgeLabelRenderer>
     </>

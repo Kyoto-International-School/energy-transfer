@@ -707,6 +707,40 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   color: #0f1a1c;
 }
 
+.store-node__menu {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  min-width: 140px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 10px 22px rgba(15, 23, 42, 0.14);
+}
+
+.store-node__menu-option {
+  border: none;
+  background: transparent;
+  color: #0f1a1c;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.store-node__menu-option[data-active="true"],
+.store-node__menu-option:hover {
+  background: rgba(43, 106, 119, 0.12);
+}
+
+.store-node__menu-option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .edge-label-text {
   position: relative;
   z-index: 1;
@@ -719,6 +753,45 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   color: #0f1a1c;
   box-shadow: 0 6px 12px rgba(16, 20, 24, 0.12);
   white-space: nowrap;
+}
+
+.edge-label-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px;
+  min-width: 150px;
+  background: #ffffff;
+  border: 1px solid var(--panel-border);
+  border-radius: 12px;
+  box-shadow: 0 12px 24px rgba(15, 23, 42, 0.16);
+  z-index: 2;
+}
+
+.edge-label-menu__option {
+  border: none;
+  background: transparent;
+  color: #0f1a1c;
+  font-size: 12px;
+  font-weight: 400;
+  text-align: left;
+  padding: 6px 8px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.edge-label-menu__option[data-active="true"],
+.edge-label-menu__option:hover {
+  background: rgba(43, 106, 119, 0.12);
+}
+
+.edge-label-menu__option:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 @supports (-webkit-touch-callout: none) {
