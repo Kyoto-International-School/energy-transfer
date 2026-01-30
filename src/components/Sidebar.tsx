@@ -200,12 +200,18 @@ export function Sidebar({
           className={`panel panel--tools${isCollapsed ? " panel--collapsed" : ""}`}
         >
           <div className="panel__header">
-            <p className="panel__eyebrow panel__eyebrow--icon">
+            <button
+              type="button"
+              className="panel__eyebrow panel__eyebrow--icon panel__eyebrow--button"
+              aria-expanded={!isCollapsed}
+              aria-controls="tools-panel-content"
+              onClick={onToggleCollapse}
+            >
               <FaTools aria-hidden="true" />
               <span className="panel__eyebrow-text">Tools</span>
-            </p>
+            </button>
           </div>
-          <div className="tools-panel__content">
+          <div className="tools-panel__content" id="tools-panel-content">
             <button
               type="button"
               className="tools-panel__button"
