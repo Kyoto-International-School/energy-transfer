@@ -1301,7 +1301,17 @@ function Editor() {
     : MINIMAP_SIZE_SMALL;
 
   return (
-    <div className="app-shell">
+    <>
+      <div className="screen-size-guard" role="alert">
+        <div className="screen-size-guard__card">
+          <h1 className="screen-size-guard__title">Bigger screen required</h1>
+          <p className="screen-size-guard__text">
+            The Energy Transfer editor works on iPad-sized screens or larger.
+            Please use a larger device.
+          </p>
+        </div>
+      </div>
+      <div className="app-shell">
       <Sidebar
         onCreateNode={onCreateNode}
         onExportImage={handleExport}
@@ -1369,7 +1379,8 @@ function Editor() {
           </ReactFlow>
         </div>
       </main>
-    </div>
+      </div>
+    </>
   );
 }
 
