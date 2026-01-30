@@ -11,6 +11,7 @@ import {
   ReactFlowProvider,
   addEdge,
   applyNodeChanges,
+  getViewportForBounds,
   useEdgesState,
   useNodesState,
   useReactFlow,
@@ -52,6 +53,7 @@ const CONTAINER_LAYOUT = {
   storeGap: 64,
   widthFallback: 168,
 };
+const EXTERNAL_NODE_SIZE = 32;
 const EDGE_MARKER = {
   type: MarkerType.ArrowClosed,
   color: "#0f1a1c",
@@ -263,6 +265,9 @@ function Editor() {
     initialSettings.sidebarCollapsed,
   );
   const [userName, setUserName] = useState(initialSettings.userName);
+  const [skipDeleteConfirm, setSkipDeleteConfirm] = useState(
+    initialSettings.skipDeleteConfirm,
+  );
   const [isExporting, setIsExporting] = useState(false);
   const selectionTimestampRef = useRef(0);
   const pointerDownOnElementRef = useRef<"node" | "edge" | "handle" | null>(
@@ -283,7 +288,7 @@ function Editor() {
     return window.localStorage.getItem("debug-touch") === "1";
   }, []);
   const nodeIdRef = useRef(getNextNodeId(initialNodes));
-  const { setViewport, getViewport } = useReactFlow();
+  const { setViewport, getViewport, screenToFlowPosition } = useReactFlow();
 
   const logTouch = useCallback(
     (label: string, detail?: Record<string, unknown>) => {
@@ -420,8 +425,9 @@ function Editor() {
       minimapSize: isMiniMapLarge ? "large" : "small",
       sidebarCollapsed: isSidebarCollapsed,
       userName,
+      skipDeleteConfirm,
     });
-  }, [isMiniMapLarge, isSidebarCollapsed, userName]);
+  }, [isMiniMapLarge, isSidebarCollapsed, skipDeleteConfirm, userName]);
 
   useEffect(() => {
     nodeIdRef.current = getNextNodeId(nodes);
@@ -440,12 +446,23 @@ function Editor() {
       const targetNode = target?.closest(".react-flow__node");
       const targetEdge = target?.closest(".react-flow__edge");
       const targetHandle = target?.closest(".react-flow__handle");
+      const labelInput = target?.closest(
+        ".container-node__label-input, .external-node__label-input",
+      );
       const dragHandle = target?.closest(
         ".node-drag-handle, .container-node__header, .external-node__label-text",
       );
       if (!target) {
         pointerDownOnElementRef.current = null;
         logTouch("pointer-down (no target)", {
+          pointerType: event.pointerType,
+        });
+        return;
+      }
+
+      if (labelInput) {
+        pointerDownOnElementRef.current = "node";
+        logTouch("pointer-down on label input", {
           pointerType: event.pointerType,
         });
         return;
@@ -769,6 +786,24 @@ function Editor() {
       const nextId = nodeIdRef.current;
       nodeIdRef.current += 1;
 
+      const emptyContainerHeight =
+        CONTAINER_LAYOUT.headerHeight +
+        CONTAINER_LAYOUT.contentPaddingTop +
+        CONTAINER_LAYOUT.contentPaddingBottom +
+        CONTAINER_LAYOUT.storeHeight;
+      const centeredPosition =
+        kind === "container"
+          ? {
+              x: position.x - CONTAINER_LAYOUT.widthFallback / 2,
+              y: position.y - emptyContainerHeight / 2,
+            }
+          : kind === "external"
+            ? {
+                x: position.x - EXTERNAL_NODE_SIZE / 2,
+                y: position.y - EXTERNAL_NODE_SIZE / 2,
+              }
+            : position;
+
       const parentId =
         kind === "store" && dropTarget.type === "container-body"
           ? dropTarget.nodeId
@@ -779,10 +814,10 @@ function Editor() {
       const relativePosition =
         parentNode && parentId
           ? {
-              x: position.x - parentNode.position.x,
-              y: position.y - parentNode.position.y,
+              x: centeredPosition.x - parentNode.position.x,
+              y: centeredPosition.y - parentNode.position.y,
             }
-          : position;
+          : centeredPosition;
 
       const newNode: EnergyNode = {
         id: `node-${nextId}`,
@@ -890,6 +925,17 @@ function Editor() {
     [updateStoreTypeForNode],
   );
 
+  const handleContainerLabelChange = useCallback(
+    (nodeId: string, label: string) => {
+      setNodes((current) =>
+        current.map((node) =>
+          node.id === nodeId ? { ...node, data: { ...node.data, label } } : node,
+        ),
+      );
+    },
+    [setNodes],
+  );
+
   const onStoreTypeChange = useCallback(
     (storeType: StoreType | "") => {
       if (!selectedNodeId) return;
@@ -957,6 +1003,7 @@ function Editor() {
           data: {
             ...node.data,
             onAddStore: addStoreToContainer,
+            onLabelChange: handleContainerLabelChange,
           },
         };
       }
@@ -970,6 +1017,15 @@ function Editor() {
           },
         };
       }
+      if (node.data.kind === "external") {
+        return {
+          ...node,
+          data: {
+            ...node.data,
+            onLabelChange: handleContainerLabelChange,
+          },
+        };
+      }
       return node;
     });
   }, [
@@ -977,6 +1033,7 @@ function Editor() {
     addStoreToContainer,
     dragHoldContainerId,
     dragHoldNodeId,
+    handleContainerLabelChange,
     handleStoreTypeSelect,
     nodes,
   ]);
@@ -1077,78 +1134,151 @@ function Editor() {
       const filename = getExportFilename(nameOverride ?? userName);
       if (!filename) return;
 
-    const target = document.querySelector<HTMLElement>(
-      ".flow-wrapper .react-flow",
-    );
-    if (!target || isExporting) return;
-
-    setIsExporting(true);
-    const wrapper = target.closest<HTMLElement>(".flow-wrapper");
-    wrapper?.classList.add("flow-wrapper--export");
-
-    const edgePaths = Array.from(
-      target.querySelectorAll<SVGPathElement>(".react-flow__edge-path"),
-    );
-    const edgeOverrides = edgePaths.map((path) => {
-      const computed = window.getComputedStyle(path);
-      const prevStroke = path.getAttribute("stroke");
-      const prevStrokeWidth = path.getAttribute("stroke-width");
-      const prevStrokeOpacity = path.getAttribute("stroke-opacity");
-      const stroke = computed.stroke || "#b1b1b7";
-      const strokeWidth = computed.strokeWidth || "1";
-      const strokeOpacity = computed.strokeOpacity;
-      path.setAttribute("stroke", stroke);
-      path.setAttribute("stroke-width", strokeWidth);
-      if (strokeOpacity && strokeOpacity !== "1") {
-        path.setAttribute("stroke-opacity", strokeOpacity);
-      } else {
-        path.removeAttribute("stroke-opacity");
-      }
-      return { path, prevStroke, prevStrokeWidth, prevStrokeOpacity };
-    });
-
-    try {
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const dataUrl = await toPng(target, {
-        cacheBust: true,
-        pixelRatio: 2,
-        backgroundColor: "#ffffff",
-        filter: (node) => {
-          if (!(node instanceof HTMLElement)) return true;
-          return !node.closest(".react-flow__panel");
-        },
-      });
-      const link = document.createElement("a");
-      link.href = dataUrl;
-      link.download = filename;
-      link.click();
-    } catch (error) {
-      console.error("Failed to export canvas", error);
-    } finally {
-      edgeOverrides.forEach(
-        ({ path, prevStroke, prevStrokeWidth, prevStrokeOpacity }) => {
-          if (prevStroke === null) {
-            path.removeAttribute("stroke");
-          } else {
-            path.setAttribute("stroke", prevStroke);
-          }
-          if (prevStrokeWidth === null) {
-            path.removeAttribute("stroke-width");
-          } else {
-            path.setAttribute("stroke-width", prevStrokeWidth);
-          }
-          if (prevStrokeOpacity === null) {
-            path.removeAttribute("stroke-opacity");
-          } else {
-            path.setAttribute("stroke-opacity", prevStrokeOpacity);
-          }
-        },
+      const target = document.querySelector<HTMLElement>(
+        ".flow-wrapper .react-flow",
       );
-      wrapper?.classList.remove("flow-wrapper--export");
-      setIsExporting(false);
-    }
+      if (!target || isExporting) return;
+
+      const contentSelectors = [
+        ".react-flow__node",
+        ".react-flow__edge-path",
+        ".edge-label-wrapper",
+        ".external-node__label",
+      ];
+      const paddingPx = 24;
+      const previousViewport = getViewport();
+      let hasViewportOverride = false;
+
+      const getContentBounds = () => {
+        const elements = contentSelectors.flatMap((selector) =>
+          Array.from(target.querySelectorAll(selector)),
+        );
+        let left = Number.POSITIVE_INFINITY;
+        let top = Number.POSITIVE_INFINITY;
+        let right = Number.NEGATIVE_INFINITY;
+        let bottom = Number.NEGATIVE_INFINITY;
+
+        elements.forEach((element) => {
+          if (element.closest(".react-flow__panel")) return;
+          const rect = element.getBoundingClientRect();
+          if (!rect.width && !rect.height) return;
+          left = Math.min(left, rect.left);
+          top = Math.min(top, rect.top);
+          right = Math.max(right, rect.right);
+          bottom = Math.max(bottom, rect.bottom);
+        });
+
+        if (!Number.isFinite(left)) return null;
+        const topLeft = screenToFlowPosition({
+          x: left - paddingPx,
+          y: top - paddingPx,
+        });
+        const bottomRight = screenToFlowPosition({
+          x: right + paddingPx,
+          y: bottom + paddingPx,
+        });
+        const minX = Math.min(topLeft.x, bottomRight.x);
+        const maxX = Math.max(topLeft.x, bottomRight.x);
+        const minY = Math.min(topLeft.y, bottomRight.y);
+        const maxY = Math.max(topLeft.y, bottomRight.y);
+
+        if (!Number.isFinite(minX) || !Number.isFinite(maxX)) return null;
+        return {
+          x: minX,
+          y: minY,
+          width: Math.max(1, maxX - minX),
+          height: Math.max(1, maxY - minY),
+        };
+      };
+
+      setIsExporting(true);
+
+      const edgePaths = Array.from(
+        target.querySelectorAll<SVGPathElement>(".react-flow__edge-path"),
+      );
+      const edgeOverrides = edgePaths.map((path) => {
+        const computed = window.getComputedStyle(path);
+        const prevStroke = path.getAttribute("stroke");
+        const prevStrokeWidth = path.getAttribute("stroke-width");
+        const prevStrokeOpacity = path.getAttribute("stroke-opacity");
+        const stroke = computed.stroke || "#b1b1b7";
+        const strokeWidth = computed.strokeWidth || "1";
+        const strokeOpacity = computed.strokeOpacity;
+        path.setAttribute("stroke", stroke);
+        path.setAttribute("stroke-width", strokeWidth);
+        if (strokeOpacity && strokeOpacity !== "1") {
+          path.setAttribute("stroke-opacity", strokeOpacity);
+        } else {
+          path.removeAttribute("stroke-opacity");
+        }
+        return { path, prevStroke, prevStrokeWidth, prevStrokeOpacity };
+      });
+
+      try {
+        const bounds = getContentBounds();
+        if (bounds) {
+          const nextViewport = getViewportForBounds(
+            bounds,
+            target.clientWidth,
+            target.clientHeight,
+            0.1,
+            2,
+            0,
+          );
+          setViewport(nextViewport, { duration: 0 });
+          hasViewportOverride = true;
+        }
+
+        await new Promise((resolve) => requestAnimationFrame(resolve));
+        const dataUrl = await toPng(target, {
+          cacheBust: true,
+          pixelRatio: 2,
+          backgroundColor: "#ffffff",
+          filter: (node) => {
+            if (!(node instanceof HTMLElement)) return true;
+            return !node.closest(".react-flow__panel");
+          },
+        });
+        const link = document.createElement("a");
+        link.href = dataUrl;
+        link.download = filename;
+        link.click();
+      } catch (error) {
+        console.error("Failed to export canvas", error);
+      } finally {
+        if (hasViewportOverride) {
+          setViewport(previousViewport, { duration: 0 });
+          await new Promise((resolve) => requestAnimationFrame(resolve));
+        }
+        edgeOverrides.forEach(
+          ({ path, prevStroke, prevStrokeWidth, prevStrokeOpacity }) => {
+            if (prevStroke === null) {
+              path.removeAttribute("stroke");
+            } else {
+              path.setAttribute("stroke", prevStroke);
+            }
+            if (prevStrokeWidth === null) {
+              path.removeAttribute("stroke-width");
+            } else {
+              path.setAttribute("stroke-width", prevStrokeWidth);
+            }
+            if (prevStrokeOpacity === null) {
+              path.removeAttribute("stroke-opacity");
+            } else {
+              path.setAttribute("stroke-opacity", prevStrokeOpacity);
+            }
+          },
+        );
+        setIsExporting(false);
+      }
     },
-    [isExporting, userName],
+    [
+      getViewport,
+      isExporting,
+      screenToFlowPosition,
+      setViewport,
+      userName,
+    ],
   );
 
   const handleClearCanvas = useCallback(() => {
@@ -1158,6 +1288,13 @@ function Editor() {
     setNodes([]);
     setEdges([]);
   }, [clearDragHold, setEdges, setNodes]);
+
+  const handleClearSettings = useCallback(() => {
+    setUserName("");
+    setSkipDeleteConfirm(false);
+    setIsMiniMapLarge(true);
+    setIsSidebarCollapsed(false);
+  }, []);
 
   const miniMapStyle = isMiniMapLarge
     ? MINIMAP_SIZE_LARGE
@@ -1170,6 +1307,7 @@ function Editor() {
         onExportImage={handleExport}
         isExporting={isExporting}
         onClearCanvas={handleClearCanvas}
+        onClearSettings={handleClearSettings}
         userName={userName}
         onUserNameChange={setUserName}
         isCollapsed={isSidebarCollapsed}
@@ -1182,6 +1320,8 @@ function Editor() {
           onLabelChange,
           onStoreTypeChange,
           onEdgeLabelChange,
+          skipDeleteConfirm,
+          onSkipDeleteConfirmChange: setSkipDeleteConfirm,
         }}
       />
       <main className="canvas">

@@ -15,13 +15,18 @@ export const StoreNode = memo(function StoreNode({
 }: NodeProps<EnergyNode>) {
   const storeLabel = data.storeType || data.label || "Select store";
   const storeType = data.storeType ?? "";
+  const isPassthrough = data.storeType === "(Passthrough)";
   const menuOptions: Array<{ label: string; value: StoreType | "" }> = [
     { label: "Select store", value: "" },
     ...STORE_TYPE_OPTIONS.map((option) => ({ label: option, value: option })),
   ];
 
   return (
-    <BaseNode className="w-36 min-h-[56px] flex items-center justify-center px-2 text-center">
+    <BaseNode
+      className={`store-node w-36 min-h-[56px] flex items-center justify-center px-2 text-center${
+        isPassthrough ? " store-node--passthrough" : ""
+      }`}
+    >
       <p className="store-node__label">{storeLabel}</p>
       <EasyConnectHandles nodeId={id} />
       <NodeToolbar

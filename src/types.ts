@@ -37,6 +37,7 @@ export type EnergyNodeData = {
   onAddStore?: (containerId: string) => void;
   onStoreTypeSelect?: (nodeId: string, storeType: StoreType | "") => void;
   isStoreMenuOpen?: boolean;
+  onLabelChange?: (nodeId: string, label: string) => void;
 };
 
 export type EnergyNode = Node<EnergyNodeData, EnergyNodeType>;

@@ -51,6 +51,7 @@ type SidebarProps = {
   onClearCanvas: () => void;
   userName: string;
   onUserNameChange: (name: string) => void;
+  onClearSettings: () => void;
   inspectorProps: InspectorProps;
   isCollapsed: boolean;
   onToggleCollapse: () => void;
@@ -81,6 +82,7 @@ export function Sidebar({
   onClearCanvas,
   userName,
   onUserNameChange,
+  onClearSettings,
   inspectorProps,
   isCollapsed,
   onToggleCollapse,
@@ -90,6 +92,7 @@ export function Sidebar({
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [draftName, setDraftName] = useState(userName);
   const [pendingExport, setPendingExport] = useState(false);
+  const [isClearSettingsConfirm, setIsClearSettingsConfirm] = useState(false);
 
   useEffect(() => {
     if (!isDragging) {
@@ -119,6 +122,7 @@ export function Sidebar({
   useEffect(() => {
     if (!isSettingsOpen) {
       setPendingExport(false);
+      setIsClearSettingsConfirm(false);
     }
   }, [isSettingsOpen]);
 
@@ -251,6 +255,29 @@ export function Sidebar({
                   />
                 </div>
                 <DialogFooter>
+                  <div className="relative mr-auto">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => setIsClearSettingsConfirm(true)}
+                    >
+                      Clear all settings
+                    </Button>
+                    {isClearSettingsConfirm && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="absolute inset-0"
+                        onClick={() => {
+                          onClearSettings();
+                          setDraftName("");
+                          setIsClearSettingsConfirm(false);
+                        }}
+                      >
+                        Really?
+                      </Button>
+                    )}
+                  </div>
                   <Button
                     variant="outline"
                     type="button"

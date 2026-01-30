@@ -2,6 +2,7 @@ type AppSettings = {
   minimapSize: "small" | "large";
   sidebarCollapsed: boolean;
   userName: string;
+  skipDeleteConfirm: boolean;
 };
 
 const SETTINGS_KEY = "energy-transfer-settings:v1";
@@ -11,6 +12,7 @@ const DEFAULT_SETTINGS: AppSettings = {
   minimapSize: "large",
   sidebarCollapsed: false,
   userName: "",
+  skipDeleteConfirm: false,
 };
 
 const normalizeMinimapSize = (value: unknown): "small" | "large" => {
@@ -32,6 +34,7 @@ export const loadSettings = (): AppSettings => {
         minimapSize: normalizeMinimapSize(parsed.minimapSize),
         sidebarCollapsed: Boolean(parsed.sidebarCollapsed),
         userName: normalizeUserName(parsed.userName),
+        skipDeleteConfirm: Boolean(parsed.skipDeleteConfirm),
       };
     }
 

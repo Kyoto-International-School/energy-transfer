@@ -111,22 +111,13 @@ export const useDnD = () => {
 
       (event.target as HTMLElement).releasePointerCapture(event.pointerId);
 
-      const { dropTarget, isDroppingOnFlow, containerBody, resolvedContainerId } =
-        resolveDropTarget(event.clientX, event.clientY);
+      const { dropTarget, isDroppingOnFlow } = resolveDropTarget(
+        event.clientX,
+        event.clientY,
+      );
 
       if (isDroppingOnFlow && dropTarget) {
-        const containerBodyElement = resolvedContainerId
-          ? document.querySelector<HTMLElement>(
-              `[data-container-body='true'][data-node-id='${resolvedContainerId}']`,
-            )
-          : containerBody;
-        const rect = containerBodyElement?.getBoundingClientRect();
-        const dropPoint = rect
-          ? {
-              x: rect.left + rect.width / 2,
-              y: rect.top + rect.height / 2,
-            }
-          : { x: event.clientX, y: event.clientY };
+        const dropPoint = { x: event.clientX, y: event.clientY };
         const flowPosition = screenToFlowPosition(dropPoint);
         dropAction?.({ position: flowPosition, dropTarget });
       }

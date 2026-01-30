@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useReactFlow, type Edge, type Node } from "@xyflow/react";
 import { FaArrowAltCircleRight, FaSearch, FaTrash } from "react-icons/fa";
 import {
@@ -10,6 +11,16 @@ import {
 } from "../types";
 import { ComponentTypeIcon } from "./component-icons";
 import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export type InspectorProps = {
   selectedNode: Node<EnergyNodeData> | null;
@@ -17,6 +28,8 @@ export type InspectorProps = {
   onLabelChange: (label: string) => void;
   onStoreTypeChange: (storeType: StoreType | "") => void;
   onEdgeLabelChange: (label: EdgeLabel | "") => void;
+  skipDeleteConfirm: boolean;
+  onSkipDeleteConfirmChange: (skip: boolean) => void;
   variant?: "panel" | "section";
   className?: string;
   isCollapsed?: boolean;
@@ -29,12 +42,16 @@ export function Inspector({
   onLabelChange,
   onStoreTypeChange,
   onEdgeLabelChange,
+  skipDeleteConfirm,
+  onSkipDeleteConfirmChange,
   variant = "panel",
   className,
   isCollapsed = false,
   onToggleCollapse,
 }: InspectorProps) {
   const { deleteElements, getNodes } = useReactFlow();
+  const [isConfirmOpen, setIsConfirmOpen] = useState(false);
+  const [skipNextConfirm, setSkipNextConfirm] = useState(false);
 
   const handleDeleteNode = () => {
     if (!selectedNode) return;
@@ -164,6 +181,24 @@ export function Inspector({
         }
       : null;
 
+  const confirmTitle = selectedNode
+    ? `Delete ${selectedNode.data.kind}?`
+    : "Delete transfer?";
+  const confirmDescription =
+    selectedNode?.data.kind === "container"
+      ? "This will remove the container and everything inside it."
+      : "This action cannot be undone.";
+
+  const handleDeleteRequest = () => {
+    if (!deleteAction) return;
+    if (skipDeleteConfirm) {
+      deleteAction.onClick();
+      return;
+    }
+    setSkipNextConfirm(false);
+    setIsConfirmOpen(true);
+  };
+
   const Wrapper = variant === "panel" ? "aside" : "section";
   const wrapperClass =
     variant === "panel"
@@ -208,12 +243,46 @@ export function Inspector({
         <div className="inspector__footer">
           <button
             type="button"
-            className="inspector__button inspector__button--danger"
-            onClick={deleteAction.onClick}
+            className="inspector__button inspector__button--icon"
+            onClick={handleDeleteRequest}
+            aria-label={deleteAction.label}
+            title={deleteAction.label}
           >
             <FaTrash aria-hidden="true" />
-            {deleteAction.label}
           </button>
+          <AlertDialog open={isConfirmOpen} onOpenChange={setIsConfirmOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>{confirmTitle}</AlertDialogTitle>
+                <AlertDialogDescription>
+                  {confirmDescription}
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <label className="inspector__confirm">
+                <input
+                  className="inspector__confirm-input"
+                  type="checkbox"
+                  checked={skipNextConfirm}
+                  onChange={(event) => setSkipNextConfirm(event.target.checked)}
+                />
+                <span>Don't ask me again</span>
+              </label>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => {
+                    deleteAction.onClick();
+                    if (skipNextConfirm) {
+                      onSkipDeleteConfirmChange(true);
+                    }
+                    setIsConfirmOpen(false);
+                  }}
+                >
+                  Delete
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       )}
     </Wrapper>
