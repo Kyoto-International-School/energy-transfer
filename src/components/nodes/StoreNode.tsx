@@ -1,4 +1,4 @@
-import { memo } from "react";
+import { memo, useLayoutEffect, useRef, useState } from "react";
 import { NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 
 import { BaseNode } from "../base-node";
@@ -18,10 +18,70 @@ export const StoreNode = memo(function StoreNode({
   const storeType = data.storeType ?? "";
   const isPassthrough = data.storeType === "(Passthrough)";
   const isBlankStore = data.storeType === BLANK_STORE_OPTION;
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuOffset = 8;
+  const menuZIndex = 2000;
+  const [menuPosition, setMenuPosition] = useState<Position>(Position.Bottom);
+  const [menuAlign, setMenuAlign] = useState<"start" | "center" | "end">(
+    "center",
+  );
   const menuOptions: Array<{ label: string; value: StoreType | "" }> = [
     { label: "Select store", value: "" },
     ...STORE_TYPE_OPTIONS.map((option) => ({ label: option, value: option })),
   ];
+
+  useLayoutEffect(() => {
+    if (!data.isStoreMenuOpen) return;
+    const menuElement = menuRef.current;
+    const flowWrapper = document.querySelector<HTMLElement>(".flow-wrapper");
+    const nodeElement = document.querySelector<HTMLElement>(
+      `.react-flow__node[data-id="${id}"]`,
+    );
+    if (!menuElement || !flowWrapper || !nodeElement) return;
+
+    const menuRect = menuElement.getBoundingClientRect();
+    const flowRect = flowWrapper.getBoundingClientRect();
+    const nodeRect = nodeElement.getBoundingClientRect();
+    const offset = menuOffset;
+
+    const spaceBottom = flowRect.bottom - (nodeRect.bottom + offset);
+    const spaceTop = nodeRect.top - flowRect.top - offset;
+    const spaceRight = flowRect.right - (nodeRect.right + offset);
+    const spaceLeft = nodeRect.left - flowRect.left - offset;
+
+    const fitsBottom = spaceBottom >= menuRect.height;
+    const fitsTop = spaceTop >= menuRect.height;
+    const fitsRight = spaceRight >= menuRect.width;
+    const fitsLeft = spaceLeft >= menuRect.width;
+
+    let nextPosition = Position.Bottom;
+    if (!fitsBottom && (fitsRight || fitsLeft)) {
+      nextPosition =
+        fitsRight && (!fitsLeft || spaceRight >= spaceLeft)
+          ? Position.Right
+          : Position.Left;
+    } else if (!fitsBottom && fitsTop) {
+      nextPosition = Position.Top;
+    }
+
+    let nextAlign: "start" | "center" | "end" = "center";
+    if (nextPosition === Position.Bottom || nextPosition === Position.Top) {
+      if (nodeRect.left + menuRect.width > flowRect.right) {
+        nextAlign = "end";
+      } else if (nodeRect.right - menuRect.width < flowRect.left) {
+        nextAlign = "start";
+      }
+    } else {
+      if (nodeRect.top + menuRect.height > flowRect.bottom) {
+        nextAlign = "end";
+      } else if (nodeRect.bottom - menuRect.height < flowRect.top) {
+        nextAlign = "start";
+      }
+    }
+
+    setMenuPosition(nextPosition);
+    setMenuAlign(nextAlign);
+  }, [data.isStoreMenuOpen, id, menuOffset]);
 
   return (
     <BaseNode
@@ -34,11 +94,13 @@ export const StoreNode = memo(function StoreNode({
       <NodeToolbar
         nodeId={id}
         isVisible={!!data.isStoreMenuOpen}
-        position={Position.Bottom}
-        offset={8}
-        align="center"
+        position={menuPosition}
+        offset={menuOffset}
+        align={menuAlign}
+        style={{ zIndex: menuZIndex }}
       >
         <div
+          ref={menuRef}
           className="store-node__menu nodrag nopan"
           role="listbox"
           aria-label="Select store type"

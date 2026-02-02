@@ -29,6 +29,7 @@ export type InspectorProps = {
   onLabelChange: (label: string) => void;
   onStoreTypeChange: (storeType: StoreType | "") => void;
   onEdgeLabelChange: (label: EdgeLabel | "") => void;
+  onDropdownOpen: () => void;
   skipDeleteConfirm: boolean;
   onSkipDeleteConfirmChange: (skip: boolean) => void;
   variant?: "panel" | "section";
@@ -43,6 +44,7 @@ export function Inspector({
   onLabelChange,
   onStoreTypeChange,
   onEdgeLabelChange,
+  onDropdownOpen,
   skipDeleteConfirm,
   onSkipDeleteConfirmChange,
   variant = "panel",
@@ -100,6 +102,8 @@ export function Inspector({
                 id="store-type"
                 className="inspector__input"
                 value={selectedNode.data.storeType ?? ""}
+                onPointerDown={onDropdownOpen}
+                onFocus={onDropdownOpen}
                 onChange={(event) =>
                   onStoreTypeChange(event.target.value as StoreType | "")
                 }
@@ -154,6 +158,8 @@ export function Inspector({
             id="edge-label"
             className="inspector__input"
             value={selectedEdge.data?.label ?? ""}
+            onPointerDown={onDropdownOpen}
+            onFocus={onDropdownOpen}
             onChange={(event) =>
               onEdgeLabelChange(event.target.value as EdgeLabel | "")
             }

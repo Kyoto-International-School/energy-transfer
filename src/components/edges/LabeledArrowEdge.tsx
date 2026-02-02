@@ -73,7 +73,13 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
   interactionWidth,
 }: EdgeProps<EnergyEdge>) {
   const labelRef = useRef<HTMLDivElement | null>(null);
+  const menuRef = useRef<HTMLDivElement | null>(null);
+  const menuOffset = 6;
   const [labelSize, setLabelSize] = useState({ width: 0, height: 0 });
+  const [menuPosition, setMenuPosition] = useState<Position>(Position.Bottom);
+  const [menuAlign, setMenuAlign] = useState<"start" | "center" | "end">(
+    "center",
+  );
   const edges = useStore((state) => state.edges);
   const nodeLookup = useStore((state) => state.nodeLookup);
   const curvature = pathOptions?.curvature ?? DEFAULT_CURVATURE;
@@ -172,6 +178,66 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
 
     return () => observer.disconnect();
   }, [labelText]);
+
+  useLayoutEffect(() => {
+    if (!data?.isEdgeMenuOpen) return;
+    const menuElement = menuRef.current;
+    const labelElement = labelRef.current;
+    const flowWrapper = document.querySelector<HTMLElement>(".flow-wrapper");
+    if (!menuElement || !labelElement || !flowWrapper) return;
+
+    const menuRect = menuElement.getBoundingClientRect();
+    const labelRect = labelElement.getBoundingClientRect();
+    const flowRect = flowWrapper.getBoundingClientRect();
+    const offset = menuOffset;
+
+    const spaceBottom = flowRect.bottom - (labelRect.bottom + offset);
+    const spaceTop = labelRect.top - flowRect.top - offset;
+    const spaceRight = flowRect.right - (labelRect.right + offset);
+    const spaceLeft = labelRect.left - flowRect.left - offset;
+
+    const fitsBottom = spaceBottom >= menuRect.height;
+    const fitsTop = spaceTop >= menuRect.height;
+    const fitsRight = spaceRight >= menuRect.width;
+    const fitsLeft = spaceLeft >= menuRect.width;
+
+    let nextPosition = Position.Bottom;
+    if (!fitsBottom && (fitsRight || fitsLeft)) {
+      nextPosition =
+        fitsRight && (!fitsLeft || spaceRight >= spaceLeft)
+          ? Position.Right
+          : Position.Left;
+    } else if (!fitsBottom && fitsTop) {
+      nextPosition = Position.Top;
+    }
+
+    const labelCenterX = (labelRect.left + labelRect.right) / 2;
+    const labelCenterY = (labelRect.top + labelRect.bottom) / 2;
+    let nextAlign: "start" | "center" | "end" = "center";
+
+    if (nextPosition === Position.Bottom || nextPosition === Position.Top) {
+      const centeredLeft = labelCenterX - menuRect.width / 2;
+      const centeredRight = labelCenterX + menuRect.width / 2;
+      if (centeredLeft < flowRect.left) {
+        nextAlign = "start";
+      } else if (centeredRight > flowRect.right) {
+        nextAlign = "end";
+      }
+    } else {
+      const centeredTop = labelCenterY - menuRect.height / 2;
+      const centeredBottom = labelCenterY + menuRect.height / 2;
+      if (centeredTop < flowRect.top) {
+        nextAlign = "start";
+      } else if (centeredBottom > flowRect.bottom) {
+        nextAlign = "end";
+      }
+    }
+
+    setMenuPosition((current) =>
+      current === nextPosition ? current : nextPosition,
+    );
+    setMenuAlign((current) => (current === nextAlign ? current : nextAlign));
+  }, [data?.isEdgeMenuOpen, labelText, menuOffset]);
   const [sourceControlX, sourceControlY] = getControlWithCurvature(
     resolvedSourcePosition,
     resolvedSourceX,
@@ -345,6 +411,75 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
       : safeTangentY / safeTangentLength;
   const markerStartX = labelX - markerUnitX * markerLength;
   const markerStartY = labelY - markerUnitY * markerLength;
+  const menuStyle = (() => {
+    const baseStyle = {
+      top: "auto",
+      right: "auto",
+      bottom: "auto",
+      left: "auto",
+      transform: "none",
+    };
+
+    switch (menuPosition) {
+      case Position.Top: {
+        baseStyle.bottom = `calc(100% + ${menuOffset}px)`;
+        if (menuAlign === "start") {
+          baseStyle.left = "0";
+          baseStyle.transform = "translateX(0)";
+        } else if (menuAlign === "end") {
+          baseStyle.right = "0";
+          baseStyle.transform = "translateX(0)";
+        } else {
+          baseStyle.left = "50%";
+          baseStyle.transform = "translateX(-50%)";
+        }
+        return baseStyle;
+      }
+      case Position.Left: {
+        baseStyle.right = `calc(100% + ${menuOffset}px)`;
+        if (menuAlign === "start") {
+          baseStyle.top = "0";
+          baseStyle.transform = "translateY(0)";
+        } else if (menuAlign === "end") {
+          baseStyle.bottom = "0";
+          baseStyle.transform = "translateY(0)";
+        } else {
+          baseStyle.top = "50%";
+          baseStyle.transform = "translateY(-50%)";
+        }
+        return baseStyle;
+      }
+      case Position.Right: {
+        baseStyle.left = `calc(100% + ${menuOffset}px)`;
+        if (menuAlign === "start") {
+          baseStyle.top = "0";
+          baseStyle.transform = "translateY(0)";
+        } else if (menuAlign === "end") {
+          baseStyle.bottom = "0";
+          baseStyle.transform = "translateY(0)";
+        } else {
+          baseStyle.top = "50%";
+          baseStyle.transform = "translateY(-50%)";
+        }
+        return baseStyle;
+      }
+      case Position.Bottom:
+      default: {
+        baseStyle.top = `calc(100% + ${menuOffset}px)`;
+        if (menuAlign === "start") {
+          baseStyle.left = "0";
+          baseStyle.transform = "translateX(0)";
+        } else if (menuAlign === "end") {
+          baseStyle.right = "0";
+          baseStyle.transform = "translateX(0)";
+        } else {
+          baseStyle.left = "50%";
+          baseStyle.transform = "translateX(-50%)";
+        }
+        return baseStyle;
+      }
+    }
+  })();
 
   return (
     <>
@@ -363,7 +498,9 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
       )}
       <EdgeLabelRenderer>
         <div
-          className={`edge-label-wrapper nodrag nopan${data?.lift ? " edge-drag-hold" : ""}`}
+          className={`edge-label-wrapper nodrag nopan${
+            data?.lift ? " edge-drag-hold" : ""
+          }${data?.isEdgeMenuOpen ? " edge-label-wrapper--menu-open" : ""}`}
           style={{
             transform: `translate(-50%, -50%) translate(${labelPosX}px, ${labelPosY}px)`,
           }}
@@ -382,7 +519,9 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
           </div>
           {data?.isEdgeMenuOpen && (
             <div
+              ref={menuRef}
               className="edge-label-menu nodrag nopan"
+              style={menuStyle}
               role="listbox"
               aria-label="Select transfer type"
               onPointerDown={(event) => event.stopPropagation()}

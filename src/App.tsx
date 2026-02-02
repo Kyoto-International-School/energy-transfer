@@ -1240,6 +1240,11 @@ function Editor() {
     [selectedEdgeId, updateEdgeLabelForEdge],
   );
 
+  const handleInspectorDropdownOpen = useCallback(() => {
+    setActiveStoreMenuId(null);
+    setActiveEdgeMenuId(null);
+  }, []);
+
   const onMoveEnd = useCallback((_: unknown, nextViewport: Viewport) => {
     setViewportState(nextViewport);
   }, []);
@@ -1488,6 +1493,7 @@ function Editor() {
           onLabelChange,
           onStoreTypeChange,
           onEdgeLabelChange,
+          onDropdownOpen: handleInspectorDropdownOpen,
           skipDeleteConfirm,
           onSkipDeleteConfirmChange: setSkipDeleteConfirm,
         }}

@@ -834,6 +834,10 @@ body.dragging-store .react-flow__node-container .container-node__body * {
   z-index: 1000;
 }
 
+.edge-label-wrapper--menu-open {
+  z-index: 2000;
+}
+
 .edge-label-hit {
   position: absolute;
   inset: -12px -16px;
