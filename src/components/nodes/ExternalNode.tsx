@@ -4,7 +4,7 @@ import type { NodeProps } from "@xyflow/react";
 import { BaseNode } from "../base-node";
 import { EasyConnectHandles } from "../EasyConnectHandles";
 import { NodeDragHandle } from "../NodeDragHandle";
-import type { EnergyNode } from "../../types";
+import { BLANK_STORE_OPTION, type EnergyNode } from "../../types";
 
 export const ExternalNode = memo(function ExternalNode({
   id,
@@ -14,7 +14,8 @@ export const ExternalNode = memo(function ExternalNode({
   const [isEditing, setIsEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState(data.label);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const roleLabel = data.label || "Unlabeled";
+  const isLabelBlank = data.label.length === 0;
+  const displayLabel = isLabelBlank ? BLANK_STORE_OPTION : data.label;
 
   useEffect(() => {
     if (isEditing) return;
@@ -62,8 +63,16 @@ export const ExternalNode = memo(function ExternalNode({
 
   return (
     <BaseNode className="relative w-8 h-8 rounded-full border border-black bg-black text-white">
-      <div className="external-node__label">
-        <span className="external-node__label-text">
+      <div
+        className={`external-node__label${
+          isLabelBlank ? " external-node__label--blank" : ""
+        }`}
+      >
+        <span
+          className={`external-node__label-text${
+            isLabelBlank ? " external-node__label-text--blank" : ""
+          }`}
+        >
           {isEditing ? (
             <input
               ref={inputRef}
@@ -87,11 +96,13 @@ export const ExternalNode = memo(function ExternalNode({
             />
           ) : (
             <span
-              className="external-node__label-label"
+              className={`external-node__label-label${
+                isLabelBlank ? " external-node__label-label--blank" : ""
+              }`}
               onDoubleClick={handleDoubleClick}
               onPointerUp={handlePointerUp}
             >
-              {roleLabel}
+              {displayLabel}
             </span>
           )}
           <NodeDragHandle className="node-drag-handle--external-inline" />

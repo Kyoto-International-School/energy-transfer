@@ -3,6 +3,7 @@ import { useReactFlow, type Edge, type Node } from "@xyflow/react";
 import { FaArrowAltCircleRight, FaSearch, FaTrash } from "react-icons/fa";
 import {
   EDGE_LABEL_OPTIONS,
+  BLANK_STORE_OPTION,
   STORE_TYPE_OPTIONS,
   type EdgeLabel,
   type EnergyEdgeData,
@@ -158,11 +159,19 @@ export function Inspector({
             }
           >
             <option value="">Select transfer</option>
-            {EDGE_LABEL_OPTIONS.map((option) => (
-              <option key={option} value={option}>
-                {option}
-              </option>
-            ))}
+                {EDGE_LABEL_OPTIONS.map((option) => (
+                  <option
+                    key={option}
+                    value={option}
+                    className={
+                      option === BLANK_STORE_OPTION
+                        ? "inspector__option--blank"
+                        : undefined
+                    }
+                  >
+                    {option}
+                  </option>
+                ))}
           </select>
         </div>
       </div>

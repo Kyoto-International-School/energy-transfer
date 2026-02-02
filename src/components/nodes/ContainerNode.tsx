@@ -8,7 +8,7 @@ import {
   BaseNodeHeaderTitle,
 } from "../base-node";
 import { NodeDragHandle } from "../NodeDragHandle";
-import type { EnergyNode } from "../../types";
+import { BLANK_STORE_OPTION, type EnergyNode } from "../../types";
 
 export const ContainerNode = memo(function ContainerNode({
   data,
@@ -18,6 +18,8 @@ export const ContainerNode = memo(function ContainerNode({
   const [isEditing, setIsEditing] = useState(false);
   const [draftLabel, setDraftLabel] = useState(data.label);
   const inputRef = useRef<HTMLInputElement | null>(null);
+  const isLabelBlank = data.label.length === 0;
+  const displayLabel = isLabelBlank ? BLANK_STORE_OPTION : data.label;
 
   useEffect(() => {
     if (isEditing) return;
@@ -64,7 +66,11 @@ export const ContainerNode = memo(function ContainerNode({
   };
 
   return (
-    <BaseNode className="w-[168px] h-full flex flex-col container-node">
+    <BaseNode
+      className={`w-[168px] h-full flex flex-col container-node${
+        isLabelBlank ? " container-node--blank" : ""
+      }`}
+    >
       <BaseNodeHeader className="container-node__header">
         <BaseNodeHeaderTitle
           onDoubleClick={handleDoubleClick}
@@ -91,7 +97,13 @@ export const ContainerNode = memo(function ContainerNode({
               aria-label="Edit container label"
             />
           ) : (
-            data.label
+            <span
+              className={
+                isLabelBlank ? "container-node__label-placeholder" : undefined
+              }
+            >
+              {displayLabel}
+            </span>
           )}
         </BaseNodeHeaderTitle>
         <NodeDragHandle />

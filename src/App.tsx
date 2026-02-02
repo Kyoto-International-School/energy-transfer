@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from "react";
 import {
   Background,
   BackgroundVariant,
@@ -36,12 +43,14 @@ import { DnDProvider, type DropTarget } from "./dnd/useDnD";
 import { loadSettings, saveSettings } from "./settings";
 import { loadDiagram, saveDiagram } from "./storage";
 import { getExportFilename } from "./utils/filename";
-import type {
-  EnergyNode,
-  EnergyEdgeData,
-  EdgeLabel,
-  EnergyNodeKind,
-  StoreType,
+import {
+  BLANK_LABEL_MIN_HEIGHT,
+  BLANK_STORE_OPTION,
+  type EnergyNode,
+  type EnergyEdgeData,
+  type EdgeLabel,
+  type EnergyNodeKind,
+  type StoreType,
 } from "./types";
 
 const CONTAINER_LAYOUT = {
@@ -52,6 +61,9 @@ const CONTAINER_LAYOUT = {
   storeGap: 64,
   widthFallback: 168,
 };
+const BLANK_MIN_HEIGHT_STYLE = {
+  "--blank-min-height": `${BLANK_LABEL_MIN_HEIGHT}px`,
+} as CSSProperties;
 const EXTERNAL_NODE_SIZE = 32;
 const EDGE_MARKER = {
   type: MarkerType.ArrowClosed,
@@ -78,20 +90,33 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
     storeGap,
     widthFallback,
   } = CONTAINER_LAYOUT;
-  const emptyHeight =
-    headerHeight + contentPaddingTop + contentPaddingBottom + storeHeight;
+  const blankMinHeight = BLANK_LABEL_MIN_HEIGHT;
+  const blankHeaderHeight = Math.max(headerHeight, blankMinHeight);
+  const blankStoreHeight = Math.max(storeHeight, blankMinHeight);
   const storeCounts = new Map<string, number>();
   const storesByParent = new Map<string, EnergyNode[]>();
+  const storeHeightsById = new Map<string, number>();
+  const containerHeaderHeights = new Map<string, number>();
   const containerMetrics = new Map<
     string,
-    { width: number; height: number; storeCount: number }
+    { width: number; height: number; storeCount: number; headerHeight: number }
   >();
 
   nodes.forEach((node) => {
     if (node.data.kind === "container") {
+      const isBlankLabel = node.data.label.length === 0;
+      containerHeaderHeights.set(
+        node.id,
+        isBlankLabel ? blankHeaderHeight : headerHeight,
+      );
       return;
     }
     if (node.data.kind === "store" && node.parentId) {
+      const isBlankStore = node.data.storeType === BLANK_STORE_OPTION;
+      storeHeightsById.set(
+        node.id,
+        isBlankStore ? blankStoreHeight : storeHeight,
+      );
       storeCounts.set(node.parentId, (storeCounts.get(node.parentId) ?? 0) + 1);
       const list = storesByParent.get(node.parentId) ?? [];
       list.push(node);
@@ -102,17 +127,34 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
   nodes.forEach((node) => {
     if (node.data.kind !== "container") return;
     const storeCount = storeCounts.get(node.id) ?? 0;
+    const stores = storesByParent.get(node.id) ?? [];
+    const totalStoreHeight = stores.reduce(
+      (sum, store) => sum + (storeHeightsById.get(store.id) ?? storeHeight),
+      0,
+    );
+    const resolvedHeaderHeight =
+      containerHeaderHeights.get(node.id) ?? headerHeight;
+    const emptyHeight =
+      resolvedHeaderHeight +
+      contentPaddingTop +
+      contentPaddingBottom +
+      storeHeight;
     const height =
       storeCount > 0
-        ? headerHeight +
+        ? resolvedHeaderHeight +
           contentPaddingTop +
           contentPaddingBottom +
-          storeCount * storeHeight +
+          totalStoreHeight +
           Math.max(0, storeCount - 1) * storeGap
         : emptyHeight;
     const width = node.measured?.width ?? node.width ?? widthFallback;
 
-    containerMetrics.set(node.id, { width, height, storeCount });
+    containerMetrics.set(node.id, {
+      width,
+      height,
+      storeCount,
+      headerHeight: resolvedHeaderHeight,
+    });
   });
 
   return nodes.map((node) => {
@@ -135,11 +177,19 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
       const siblings = storesByParent.get(node.parentId) ?? [];
       const index = siblings.findIndex((store) => store.id === node.id);
       const width = metrics?.width ?? widthFallback;
+      const resolvedHeaderHeight = metrics?.headerHeight ?? headerHeight;
+      const resolvedStoreHeight =
+        storeHeightsById.get(node.id) ?? storeHeight;
+      const safeIndex = Math.max(index, 0);
+      let yOffset = resolvedHeaderHeight + contentPaddingTop;
+
+      for (let i = 0; i < safeIndex; i += 1) {
+        const sibling = siblings[i];
+        yOffset +=
+          (storeHeightsById.get(sibling.id) ?? storeHeight) + storeGap;
+      }
       const y =
-        headerHeight +
-        contentPaddingTop +
-        storeHeight / 2 +
-        Math.max(index, 0) * (storeHeight + storeGap);
+        yOffset + resolvedStoreHeight / 2;
       const x = width / 2;
       const extent: EnergyNode["extent"] = "parent";
       const origin: EnergyNode["origin"] = [0.5, 0.5];
@@ -158,7 +208,9 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
     }
     if (node.data.kind !== "container") return baseNode;
     const metrics = containerMetrics.get(node.id);
-    const height = metrics?.height ?? emptyHeight;
+    const height =
+      metrics?.height ??
+      headerHeight + contentPaddingTop + contentPaddingBottom + storeHeight;
 
     return {
       ...baseNode,
@@ -166,7 +218,7 @@ function updateContainerSizing(nodes: EnergyNode[]): EnergyNode[] {
         ...baseNode.style,
         height,
         minHeight: height,
-        "--container-header-height": `${headerHeight}px`,
+        "--container-header-height": `${metrics?.headerHeight ?? headerHeight}px`,
         "--container-content-pt": `${contentPaddingTop}px`,
         "--container-content-pb": `${contentPaddingBottom}px`,
       },
@@ -1361,6 +1413,39 @@ function Editor() {
     setEdges([]);
   }, [clearDragHold, setEdges, setNodes]);
 
+  const handleClearLabels = useCallback(() => {
+    setNodes((current) =>
+      updateContainerSizing(
+        current.map((node) => {
+          if (node.data.kind === "store") {
+            return {
+              ...node,
+              data: {
+                ...node.data,
+                storeType: BLANK_STORE_OPTION,
+                label: BLANK_STORE_OPTION,
+              },
+            };
+          }
+          return {
+            ...node,
+            data: {
+              ...node.data,
+              label: "",
+            },
+          };
+        }),
+      ),
+    );
+    setEdges((current) =>
+      current.map((edge) => ({
+        ...edge,
+        data: { ...edge.data, label: BLANK_STORE_OPTION },
+        label: BLANK_STORE_OPTION,
+      })),
+    );
+  }, [setEdges, setNodes]);
+
   const handleClearSettings = useCallback(() => {
     setUserName("");
     setSkipDeleteConfirm(false);
@@ -1383,12 +1468,13 @@ function Editor() {
           </p>
         </div>
       </div>
-      <div className="app-shell">
+      <div className="app-shell" style={BLANK_MIN_HEIGHT_STYLE}>
       <Sidebar
         onCreateNode={onCreateNode}
         onExportImage={handleExport}
         isExporting={isExporting}
         onClearCanvas={handleClearCanvas}
+        onClearLabels={handleClearLabels}
         onClearSettings={handleClearSettings}
         userName={userName}
         onUserNameChange={setUserName}

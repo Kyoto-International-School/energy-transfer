@@ -4,6 +4,7 @@ import { NodeToolbar, Position, type NodeProps } from "@xyflow/react";
 import { BaseNode } from "../base-node";
 import { EasyConnectHandles } from "../EasyConnectHandles";
 import {
+  BLANK_STORE_OPTION,
   STORE_TYPE_OPTIONS,
   type EnergyNode,
   type StoreType,
@@ -16,6 +17,7 @@ export const StoreNode = memo(function StoreNode({
   const storeLabel = data.storeType || data.label || "Select store";
   const storeType = data.storeType ?? "";
   const isPassthrough = data.storeType === "(Passthrough)";
+  const isBlankStore = data.storeType === BLANK_STORE_OPTION;
   const menuOptions: Array<{ label: string; value: StoreType | "" }> = [
     { label: "Select store", value: "" },
     ...STORE_TYPE_OPTIONS.map((option) => ({ label: option, value: option })),
@@ -25,7 +27,7 @@ export const StoreNode = memo(function StoreNode({
     <BaseNode
       className={`store-node w-36 min-h-[56px] flex items-center justify-center px-2 text-center${
         isPassthrough ? " store-node--passthrough" : ""
-      }`}
+      }${isBlankStore ? " store-node--blank" : ""}`}
     >
       <p className="store-node__label">{storeLabel}</p>
       <EasyConnectHandles nodeId={id} />
@@ -46,7 +48,11 @@ export const StoreNode = memo(function StoreNode({
             <button
               key={option.value || "select"}
               type="button"
-              className="store-node__menu-option"
+              className={`store-node__menu-option${
+                option.value === BLANK_STORE_OPTION
+                  ? " store-node__menu-option--blank"
+                  : ""
+              }`}
               aria-pressed={storeType === option.value}
               data-active={storeType === option.value}
               onClick={(event) => {

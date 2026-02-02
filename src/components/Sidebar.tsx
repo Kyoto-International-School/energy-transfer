@@ -14,21 +14,18 @@ import {
   type OnDropAction,
 } from "../dnd/useDnD";
 import type { EnergyNodeKind } from "../types";
-import { FaCamera, FaCog, FaCubes, FaTools, FaTrash } from "react-icons/fa";
+import {
+  FaCamera,
+  FaCog,
+  FaCubes,
+  FaEraser,
+  FaTools,
+  FaTrash,
+} from "react-icons/fa";
+import { GiUnlitBomb } from "react-icons/gi";
 import { TbArrowsTransferUpDown, TbDownload, TbUpload } from "react-icons/tb";
 import { ComponentTypeIcon } from "./component-icons";
 import { Inspector, type InspectorProps } from "./Inspector";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-  AlertDialogTrigger,
-} from "@/components/ui/alert-dialog";
 import {
   Dialog,
   DialogContent,
@@ -62,6 +59,7 @@ type SidebarProps = {
   onExportImage: (nameOverride?: string) => void;
   isExporting: boolean;
   onClearCanvas: () => void;
+  onClearLabels: () => void;
   userName: string;
   onUserNameChange: (name: string) => void;
   onClearSettings: () => void;
@@ -93,6 +91,7 @@ export function Sidebar({
   onExportImage,
   isExporting,
   onClearCanvas,
+  onClearLabels,
   userName,
   onUserNameChange,
   onClearSettings,
@@ -104,9 +103,12 @@ export function Sidebar({
   const [activeKind, setActiveKind] = useState<EnergyNodeKind | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isTransferOpen, setIsTransferOpen] = useState(false);
+  const [isClearDataOpen, setIsClearDataOpen] = useState(false);
   const [draftName, setDraftName] = useState(userName);
   const [pendingExport, setPendingExport] = useState(false);
   const [isClearSettingsConfirm, setIsClearSettingsConfirm] = useState(false);
+  const [isClearCanvasConfirm, setIsClearCanvasConfirm] = useState(false);
+  const [isClearLabelsConfirm, setIsClearLabelsConfirm] = useState(false);
   const [uploadPayload, setUploadPayload] = useState<LocalStorageExport | null>(
     null,
   );
@@ -145,6 +147,13 @@ export function Sidebar({
       setIsClearSettingsConfirm(false);
     }
   }, [isSettingsOpen]);
+
+  useEffect(() => {
+    if (!isClearDataOpen) {
+      setIsClearCanvasConfirm(false);
+      setIsClearLabelsConfirm(false);
+    }
+  }, [isClearDataOpen]);
 
   const resetTransferState = useCallback(() => {
     setUploadPayload(null);
@@ -309,6 +318,87 @@ export function Sidebar({
             >
               <FaCamera aria-hidden="true" />
             </button>
+            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="tools-panel__button"
+                  aria-label="Settings"
+                  title="Settings"
+                >
+                  <FaCog aria-hidden="true" />
+                </button>
+              </DialogTrigger>
+              <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
+                <DialogHeader>
+                  <DialogTitle>Settings</DialogTitle>
+                  <DialogDescription>
+                    Customize your workspace details.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-2">
+                  <label className="inspector__label" htmlFor="settings-name">
+                    Your name
+                  </label>
+                  <input
+                    id="settings-name"
+                    className="inspector__input"
+                    type="text"
+                    value={draftName}
+                    onChange={(event) => setDraftName(event.target.value)}
+                    placeholder="Add your name"
+                  />
+                </div>
+                <DialogFooter>
+                  <div className="relative mr-auto">
+                    <Button
+                      variant="outline"
+                      type="button"
+                      onClick={() => setIsClearSettingsConfirm(true)}
+                    >
+                      Clear all settings
+                    </Button>
+                    {isClearSettingsConfirm && (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        className="absolute inset-0"
+                        onClick={() => {
+                          onClearSettings();
+                          setDraftName("");
+                          setIsClearSettingsConfirm(false);
+                        }}
+                      >
+                        Really?
+                      </Button>
+                    )}
+                  </div>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    onClick={() => setIsSettingsOpen(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    disabled={!draftName.trim()}
+                    onClick={() => {
+                      const trimmedName = draftName.trim();
+                      if (!trimmedName) return;
+                      onUserNameChange(trimmedName);
+                      if (pendingExport) {
+                        onExportImage(trimmedName);
+                        setPendingExport(false);
+                      }
+                      setIsSettingsOpen(false);
+                    }}
+                  >
+                    Save
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
             <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
               <DialogTrigger asChild>
                 <button
@@ -402,117 +492,107 @@ export function Sidebar({
                 <DialogFooter showCloseButton />
               </DialogContent>
             </Dialog>
-            <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
+            <Dialog open={isClearDataOpen} onOpenChange={setIsClearDataOpen}>
               <DialogTrigger asChild>
                 <button
                   type="button"
                   className="tools-panel__button"
-                  aria-label="Settings"
-                  title="Settings"
+                  aria-label="Clear data"
+                  title="Clear data"
                 >
-                  <FaCog aria-hidden="true" />
+                  <FaTrash aria-hidden="true" />
                 </button>
               </DialogTrigger>
               <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
                 <DialogHeader>
-                  <DialogTitle>Settings</DialogTitle>
+                  <DialogTitle>Clear data</DialogTitle>
                   <DialogDescription>
-                    Customize your workspace details.
+                    Remove stored data from your workspace.
                   </DialogDescription>
                 </DialogHeader>
-                <div className="grid gap-2">
-                  <label className="inspector__label" htmlFor="settings-name">
-                    Your name
-                  </label>
-                  <input
-                    id="settings-name"
-                    className="inspector__input"
-                    type="text"
-                    value={draftName}
-                    onChange={(event) => setDraftName(event.target.value)}
-                    placeholder="Add your name"
-                  />
-                </div>
-                <DialogFooter>
-                  <div className="relative mr-auto">
-                    <Button
-                      variant="outline"
-                      type="button"
-                      onClick={() => setIsClearSettingsConfirm(true)}
-                    >
-                      Clear all settings
-                    </Button>
-                    {isClearSettingsConfirm && (
-                      <Button
-                        type="button"
-                        variant="destructive"
-                        className="absolute inset-0"
-                        onClick={() => {
-                          onClearSettings();
-                          setDraftName("");
-                          setIsClearSettingsConfirm(false);
-                        }}
-                      >
-                        Really?
-                      </Button>
-                    )}
+                <div className="grid gap-5">
+                  <div className="rounded-lg border p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Clear labels</p>
+                        <p className="text-xs text-muted-foreground">
+                          Sets all node labels to blank.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          <strong className="font-semibold">
+                            This cannot be undone.
+                          </strong>
+                        </p>
+                      </div>
+                      <div className="relative">
+                        <Button
+                          type="button"
+                          className="bg-black text-white hover:bg-black/90"
+                          onClick={() => setIsClearLabelsConfirm(true)}
+                        >
+                          <FaEraser aria-hidden="true" />
+                          Clear labels
+                        </Button>
+                        {isClearLabelsConfirm && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="absolute inset-0"
+                            onClick={() => {
+                              onClearLabels();
+                              setIsClearLabelsConfirm(false);
+                              setIsClearDataOpen(false);
+                            }}
+                          >
+                            Really?
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <Button
-                    variant="outline"
-                    type="button"
-                    onClick={() => setIsSettingsOpen(false)}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    type="button"
-                    disabled={!draftName.trim()}
-                    onClick={() => {
-                      const trimmedName = draftName.trim();
-                      if (!trimmedName) return;
-                      onUserNameChange(trimmedName);
-                      if (pendingExport) {
-                        onExportImage(trimmedName);
-                        setPendingExport(false);
-                      }
-                      setIsSettingsOpen(false);
-                    }}
-                  >
-                    Save
-                  </Button>
-                </DialogFooter>
+                  <div className="rounded-lg border p-4">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">Clear canvas</p>
+                        <p className="text-xs text-muted-foreground">
+                          Removes all components and transfers from the canvas.
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          <strong className="font-semibold">
+                            This cannot be undone.
+                          </strong>
+                        </p>
+                      </div>
+                      <div className="relative">
+                        <Button
+                          type="button"
+                          className="bg-black text-white hover:bg-black/90"
+                          onClick={() => setIsClearCanvasConfirm(true)}
+                        >
+                          <GiUnlitBomb aria-hidden="true" />
+                          Clear canvas
+                        </Button>
+                        {isClearCanvasConfirm && (
+                          <Button
+                            type="button"
+                            variant="destructive"
+                            className="absolute inset-0"
+                            onClick={() => {
+                              onClearCanvas();
+                              setIsClearCanvasConfirm(false);
+                              setIsClearDataOpen(false);
+                            }}
+                          >
+                            Really?
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter showCloseButton />
               </DialogContent>
             </Dialog>
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <button
-                  type="button"
-                  className="tools-panel__button"
-                  aria-label="Clear canvas"
-                  title="Clear canvas"
-                >
-                  <FaTrash aria-hidden="true" />
-                </button>
-              </AlertDialogTrigger>
-              <AlertDialogContent size="sm">
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Clear canvas?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    This removes all components and transfers. This can't be
-                    undone.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancel</AlertDialogCancel>
-                  <AlertDialogAction
-                    variant="destructive"
-                    onClick={onClearCanvas}
-                  >
-                    Clear
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
           </div>
         </section>
       </aside>

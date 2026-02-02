@@ -10,7 +10,12 @@ import {
 
 import { getEdgeParams, getNodeRect } from "@/lib/edge-utils";
 
-import { EDGE_LABEL_OPTIONS, type EdgeLabel, type EnergyEdge } from "../../types";
+import {
+  BLANK_STORE_OPTION,
+  EDGE_LABEL_OPTIONS,
+  type EdgeLabel,
+  type EnergyEdge,
+} from "../../types";
 
 const DEFAULT_CURVATURE = 0.25;
 const LABEL_MARGIN = 6;
@@ -142,6 +147,7 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
   });
   const labelText = data?.label || label || "Select transfer";
   const activeLabel = data?.label ?? "";
+  const isBlankLabel = labelText === BLANK_STORE_OPTION;
   const menuOptions: Array<{ label: string; value: EdgeLabel | "" }> = [
     { label: "Select transfer", value: "" },
     ...EDGE_LABEL_OPTIONS.map((option) => ({ label: option, value: option })),
@@ -202,10 +208,12 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
   const baseNormalY = safeTangentX / safeTangentLength;
   let labelPosX = labelX;
   let labelPosY = labelY;
+  let normalX = 0;
+  let normalY = -1;
 
   if (!isIntraContainer) {
-    let normalX = baseNormalX;
-    let normalY = baseNormalY;
+    normalX = baseNormalX;
+    normalY = baseNormalY;
 
     if (normalY > 0) {
       normalX = -normalX;
@@ -287,8 +295,8 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
         (candidateB.collisions < candidateA.collisions ||
           (candidateB.collisions === candidateA.collisions &&
             candidateB.dirY < candidateA.dirY)));
-    const normalX = useCandidateB ? candidateB.dirX : candidateA.dirX;
-    const normalY = useCandidateB ? candidateB.dirY : candidateA.dirY;
+    normalX = useCandidateB ? candidateB.dirX : candidateA.dirX;
+    normalY = useCandidateB ? candidateB.dirY : candidateA.dirY;
 
     const basePosX = labelX + normalX * baseOffset;
     const basePosY = labelY + normalY * baseOffset;
@@ -315,6 +323,13 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
     const finalOffset = baseOffset + extraOffset;
     labelPosX = labelX + normalX * finalOffset;
     labelPosY = labelY + normalY * finalOffset;
+  }
+  if (isBlankLabel && labelSize.height > 0) {
+    const blankExtraOffset = Math.max(0, (labelSize.height - 20) / 2);
+    if (blankExtraOffset > 0) {
+      labelPosX += normalX * blankExtraOffset;
+      labelPosY += normalY * blankExtraOffset;
+    }
   }
   const markerLength = 16;
   const markerDirX = resolvedTargetX - labelX;
@@ -359,7 +374,10 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
           onPointerDown={(event) => event.stopPropagation()}
         >
           <span className="edge-label-hit" aria-hidden="true" />
-          <div ref={labelRef} className="edge-label-text">
+          <div
+            ref={labelRef}
+            className={`edge-label-text${isBlankLabel ? " edge-label-text--blank" : ""}`}
+          >
             {labelText}
           </div>
           {data?.isEdgeMenuOpen && (
@@ -373,7 +391,11 @@ export const LabeledArrowEdge = memo(function LabeledArrowEdge({
                 <button
                   key={option.value || "select"}
                   type="button"
-                  className="edge-label-menu__option"
+                  className={`edge-label-menu__option${
+                    option.value === BLANK_STORE_OPTION
+                      ? " edge-label-menu__option--blank"
+                      : ""
+                  }`}
                   aria-pressed={activeLabel === option.value}
                   data-active={activeLabel === option.value}
                   onClick={(event) => {

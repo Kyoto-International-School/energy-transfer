@@ -4,6 +4,9 @@ export type EnergyNodeKind = "container" | "store" | "external";
 
 export type EnergyNodeType = "container" | "store" | "external";
 
+export const BLANK_STORE_OPTION = "________________" as const;
+export const BLANK_LABEL_MIN_HEIGHT = 48;
+
 export const STORE_TYPE_OPTIONS = [
   "Thermal",
   "Kinetic",
@@ -14,6 +17,7 @@ export const STORE_TYPE_OPTIONS = [
   "Electrostatic potential",
   "Magnetic potential",
   "(Passthrough)",
+  BLANK_STORE_OPTION,
 ] as const;
 
 export type StoreType = (typeof STORE_TYPE_OPTIONS)[number];
@@ -25,6 +29,7 @@ export const EDGE_LABEL_OPTIONS = [
   "Electrical",
   "Sound",
   "Thermal conduction",
+  BLANK_STORE_OPTION,
 ] as const;
 
 export type EdgeLabel = (typeof EDGE_LABEL_OPTIONS)[number];
