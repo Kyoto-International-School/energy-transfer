@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { MouseEvent } from "react";
 import {
   Background,
   BackgroundVariant,
@@ -66,6 +65,7 @@ const EXTERNAL_DRAG_HANDLE_SELECTOR = ".external-node__label-text";
 const DRAG_HOLD_DELAY = 0;
 const DRAG_HOLD_CANCEL_DISTANCE = 6;
 const DRAG_HOLD_THRESHOLD = Number.POSITIVE_INFINITY;
+const CONNECT_DRAG_THRESHOLD = 8;
 const MINIMAP_SIZE_SMALL = { width: 80, height: 60 };
 const MINIMAP_SIZE_LARGE = { width: 200, height: 150 };
 
@@ -201,6 +201,12 @@ const initialNodes: EnergyNode[] = updateContainerSizing([
 ]);
 
 type EnergyEdge = Edge<EnergyEdgeData>;
+type ConnectGesture = {
+  startX: number;
+  startY: number;
+  maxDistance: number;
+  startTime: number;
+};
 
 const initialEdges: EnergyEdge[] = [
   {
@@ -280,6 +286,7 @@ function Editor() {
     active: false,
     nodeId: null,
   });
+  const connectGestureRef = useRef<ConnectGesture | null>(null);
   const debugTouch = useMemo(() => {
     if (typeof window === "undefined") return false;
     if ((window as { DEBUG_TOUCH?: boolean }).DEBUG_TOUCH) return true;
@@ -300,6 +307,33 @@ function Editor() {
       }
     },
     [debugTouch],
+  );
+
+  const getConnectEventPoint = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      if ("touches" in event) {
+        const touch = event.touches[0] ?? event.changedTouches[0];
+        if (!touch) return null;
+        return { x: touch.clientX, y: touch.clientY };
+      }
+      return { x: event.clientX, y: event.clientY };
+    },
+    [],
+  );
+
+  const updateConnectGestureDistance = useCallback(
+    (clientX: number, clientY: number) => {
+      const gesture = connectGestureRef.current;
+      if (!gesture) return;
+      const distance = Math.hypot(
+        clientX - gesture.startX,
+        clientY - gesture.startY,
+      );
+      if (distance > gesture.maxDistance) {
+        gesture.maxDistance = distance;
+      }
+    },
+    [],
   );
 
   const clearDragHold = useCallback(
@@ -495,6 +529,12 @@ function Editor() {
       }
 
       if (targetHandle) {
+        connectGestureRef.current = {
+          startX: event.clientX,
+          startY: event.clientY,
+          maxDistance: 0,
+          startTime: performance.now(),
+        };
         pointerDownOnElementRef.current = "handle";
         logTouch("pointer-down on handle", {
           pointerType: event.pointerType,
@@ -529,6 +569,9 @@ function Editor() {
     };
 
     const handlePointerMove = (event: PointerEvent) => {
+      if (connectGestureRef.current && event.buttons > 0) {
+        updateConnectGestureDistance(event.clientX, event.clientY);
+      }
       if (!dragHoldTimerRef.current) return;
       if (dragHoldPointerIdRef.current !== event.pointerId) return;
       const start = dragHoldStartRef.current;
@@ -558,10 +601,21 @@ function Editor() {
       document.removeEventListener("pointerup", handlePointerUp, true);
       document.removeEventListener("pointercancel", handlePointerUp, true);
     };
-  }, [clearDragHold, logTouch]);
+  }, [clearDragHold, logTouch, updateConnectGestureDistance]);
 
   const onConnect = useCallback(
-    (connection: Connection) =>
+    (connection: Connection) => {
+      const gesture = connectGestureRef.current;
+      if (!gesture || gesture.maxDistance < CONNECT_DRAG_THRESHOLD) {
+        logTouch("connect ignored (below drag threshold)", {
+          maxDistance: gesture?.maxDistance ?? 0,
+          elapsed: gesture ? performance.now() - gesture.startTime : 0,
+        });
+        connectGestureRef.current = null;
+        return;
+      }
+
+      connectGestureRef.current = null;
       setEdges((eds) =>
         addEdge(
           {
@@ -573,8 +627,9 @@ function Editor() {
           },
           eds,
         ),
-      ),
-    [setEdges],
+      );
+    },
+    [logTouch, setEdges],
   );
 
   const isValidConnection: IsValidConnection = useCallback(
@@ -733,10 +788,27 @@ function Editor() {
     setActiveEdgeMenuId(null);
   }, []);
 
-  const handleConnectStart = useCallback(() => {
-    setActiveStoreMenuId(null);
-    setActiveEdgeMenuId(null);
-  }, []);
+  const handleConnectStart = useCallback(
+    (event: MouseEvent | TouchEvent) => {
+      setActiveStoreMenuId(null);
+      setActiveEdgeMenuId(null);
+
+      const point = getConnectEventPoint(event);
+      if (!point) {
+        connectGestureRef.current = null;
+        return;
+      }
+
+      connectGestureRef.current = {
+        startX: point.x,
+        startY: point.y,
+        maxDistance: 0,
+        startTime: performance.now(),
+      };
+      logTouch("connect-start", { x: point.x, y: point.y });
+    },
+    [getConnectEventPoint, logTouch],
+  );
 
   const handlePaneClick = useCallback(
     (event: React.MouseEvent) => {
@@ -1121,7 +1193,7 @@ function Editor() {
   }, []);
 
   const handleMiniMapClick = useCallback(
-    (event: MouseEvent, _position: XYPosition) => {
+    (event: React.MouseEvent, _position: XYPosition) => {
       event.preventDefault();
       event.stopPropagation();
       setIsMiniMapLarge((current) => !current);
