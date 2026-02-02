@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type ChangeEvent,
+} from "react";
 import { type XYPosition } from "@xyflow/react";
 
 import {
@@ -9,6 +15,7 @@ import {
 } from "../dnd/useDnD";
 import type { EnergyNodeKind } from "../types";
 import { FaCamera, FaCog, FaCubes, FaTools, FaTrash } from "react-icons/fa";
+import { TbArrowsTransferUpDown, TbDownload, TbUpload } from "react-icons/tb";
 import { ComponentTypeIcon } from "./component-icons";
 import { Inspector, type InspectorProps } from "./Inspector";
 import {
@@ -32,7 +39,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { getExportFilename } from "@/utils/filename";
+import {
+  applyLocalStorageImport,
+  downloadLocalStorageExport,
+  parseLocalStorageExport,
+  type LocalStorageExport,
+} from "@/storage";
+import { getExportFilename, getStorageExportFilename } from "@/utils/filename";
 
 type SidebarItem = {
   kind: EnergyNodeKind;
@@ -90,9 +103,16 @@ export function Sidebar({
   const { isDragging, onDragStart } = useDnD();
   const [activeKind, setActiveKind] = useState<EnergyNodeKind | null>(null);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isTransferOpen, setIsTransferOpen] = useState(false);
   const [draftName, setDraftName] = useState(userName);
   const [pendingExport, setPendingExport] = useState(false);
   const [isClearSettingsConfirm, setIsClearSettingsConfirm] = useState(false);
+  const [uploadPayload, setUploadPayload] = useState<LocalStorageExport | null>(
+    null,
+  );
+  const [uploadError, setUploadError] = useState<string | null>(null);
+  const [isUploadConfirm, setIsUploadConfirm] = useState(false);
+  const uploadInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!isDragging) {
@@ -126,6 +146,21 @@ export function Sidebar({
     }
   }, [isSettingsOpen]);
 
+  const resetTransferState = useCallback(() => {
+    setUploadPayload(null);
+    setUploadError(null);
+    setIsUploadConfirm(false);
+    if (uploadInputRef.current) {
+      uploadInputRef.current.value = "";
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isTransferOpen) {
+      resetTransferState();
+    }
+  }, [isTransferOpen, resetTransferState]);
+
   const createDropAction = useCallback(
     (kind: EnergyNodeKind): OnDropAction => {
       return ({ position, dropTarget }) => {
@@ -135,6 +170,51 @@ export function Sidebar({
     },
     [onCreateNode],
   );
+
+  const handleDownloadStorage = useCallback(() => {
+    const filename = getStorageExportFilename(userName);
+    downloadLocalStorageExport(filename);
+  }, [userName]);
+
+  const handleUploadFileChange = useCallback(
+    async (event: ChangeEvent<HTMLInputElement>) => {
+      const file = event.target.files?.[0] ?? null;
+      setUploadError(null);
+      setUploadPayload(null);
+      setIsUploadConfirm(false);
+
+      if (!file) return;
+
+      try {
+        const text = await file.text();
+        const parsed = parseLocalStorageExport(text);
+        if (!parsed) {
+          setUploadError("That file isn't a valid storage export.");
+          return;
+        }
+        setUploadPayload(parsed);
+      } catch {
+        setUploadError("Unable to read that file.");
+      }
+    },
+    [],
+  );
+
+  const handleUploadConfirm = useCallback(() => {
+    if (!uploadPayload) return;
+
+    const didApply = applyLocalStorageImport(uploadPayload);
+    if (!didApply) {
+      setUploadError("Unable to restore data from that export.");
+      setIsUploadConfirm(false);
+      return;
+    }
+
+    setIsTransferOpen(false);
+    if (typeof window !== "undefined") {
+      window.location.reload();
+    }
+  }, [uploadPayload]);
 
   return (
     <>
@@ -229,6 +309,99 @@ export function Sidebar({
             >
               <FaCamera aria-hidden="true" />
             </button>
+            <Dialog open={isTransferOpen} onOpenChange={setIsTransferOpen}>
+              <DialogTrigger asChild>
+                <button
+                  type="button"
+                  className="tools-panel__button"
+                  aria-label="Data transfer"
+                  title="Data transfer"
+                >
+                  <TbArrowsTransferUpDown aria-hidden="true" />
+                </button>
+              </DialogTrigger>
+              <DialogContent onOpenAutoFocus={(event) => event.preventDefault()}>
+                <DialogHeader>
+                  <DialogTitle>Data transfer</DialogTitle>
+                  <DialogDescription>
+                    Download a backup or restore your saved data.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="grid gap-5">
+                  <div className="rounded-lg border p-4">
+                    <div className="space-y-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Download backup</p>
+                          <p className="text-xs text-muted-foreground">
+                            Save your current data as JSON.
+                          </p>
+                        </div>
+                        <Button type="button" onClick={handleDownloadStorage}>
+                          <TbDownload aria-hidden="true" />
+                          Download
+                        </Button>
+                      </div>
+                      <div className="h-px w-full bg-border" aria-hidden="true" />
+                      <div className="space-y-2">
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Restore backup</p>
+                          <p className="text-xs text-muted-foreground">
+                            Load a previously saved JSON file.
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            <strong className="font-semibold">
+                              This will overwrite your existing diagram(s).
+                            </strong>
+                          </p>
+                        </div>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="grid gap-2">
+                            <input
+                              ref={uploadInputRef}
+                              type="file"
+                              accept="application/json"
+                              className="inspector__input w-full file:opacity-0 file:w-0 file:min-w-0 file:p-0 file:mr-0 file:border-0 file:bg-transparent"
+                              aria-label="Choose a JSON backup file"
+                              onChange={handleUploadFileChange}
+                            />
+                            {uploadError && (
+                              <p className="text-xs text-destructive">
+                                {uploadError}
+                              </p>
+                            )}
+                          </div>
+                          <div className="relative">
+                            <Button
+                              type="button"
+                              disabled={!uploadPayload}
+                              onClick={() => setIsUploadConfirm(true)}
+                            >
+                              <TbUpload aria-hidden="true" />
+                              Restore
+                            </Button>
+                            {isUploadConfirm && (
+                              <Button
+                                type="button"
+                                variant="destructive"
+                                className="absolute inset-0"
+                                onClick={() => {
+                                  setIsUploadConfirm(false);
+                                  handleUploadConfirm();
+                                }}
+                              >
+                                Really?
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter showCloseButton />
+              </DialogContent>
+            </Dialog>
             <Dialog open={isSettingsOpen} onOpenChange={setIsSettingsOpen}>
               <DialogTrigger asChild>
                 <button
